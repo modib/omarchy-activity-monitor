@@ -30,13 +30,6 @@ KeyboardPanel {
   property string tempFormat: "degree-unit"
   property bool settingsOpen: false
 
-  // How much real time the rolling history graphs span: historyCap samples at
-  // the service's sampling interval.
-  readonly property string historyWindowLabel: {
-    var secs = hw.historySeconds
-    return secs >= 120 ? Math.floor(secs / 60) + " min" : secs + "s"
-  }
-
   // Process list state. Three fixed lists (Heaviest CPU, Heaviest Memory,
   // Idle Apps) each capped at a handful of rows; pending* is the one-shot
   // confirm state for a kill offered on any row.
@@ -543,18 +536,18 @@ Text {
           spacing: Style.space(12)
 
           HistoryGraph {
-            title: "CPU Load History (" + root.historyWindowLabel + ")"
+            title: "CPU"
             userWidth: (parent.width - parent.spacing) / 2
             values: hw.cpuHistory
-            currentText: hw.cpuPercent >= 0 ? (Math.round(hw.cpuPercent) + "% current") : "–"
+            currentText: hw.cpuPercent >= 0 ? (Math.round(hw.cpuPercent) + "%") : "–"
             currentColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
           }
 
           HistoryGraph {
-            title: "Memory Usage History (" + root.historyWindowLabel + ")"
+            title: "Memory"
             userWidth: (parent.width - parent.spacing) / 2
             values: hw.memHistory
-            currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "% used") : "–"
+            currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "%") : "–"
             currentColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
           }
         }
@@ -564,7 +557,7 @@ Text {
           spacing: Style.space(12)
 
           HistoryGraph {
-            title: "Temperature History (" + root.historyWindowLabel + ")"
+            title: "Temperature"
             userWidth: (parent.width - parent.spacing) / 2
             values: hw.tempHistory
             placeholder: hw.hasTempSensor ? "collecting samples…" : "no temperature sensor"
@@ -573,7 +566,7 @@ Text {
           }
 
           HistoryGraph {
-            title: "Fan Speed History (" + root.historyWindowLabel + ")"
+            title: "Fan Speed"
             userWidth: (parent.width - parent.spacing) / 2
             values: hw.fanHistory
             placeholder: hw.hasFanSensor ? "collecting samples…" : "no fan sensor"
@@ -738,7 +731,7 @@ Text {
           glyph: "\uF2A3"
           listModel: root.processIdleList
           scope: "idle"
-          emptyText: "No idle apps to reclaim right now."
+          emptyText: "Nothing qualifies right now — idle apps need ≤1% core, ≥150 MiB RAM, a window, no focus, and no terminal."
           showMeta: true
         }
 

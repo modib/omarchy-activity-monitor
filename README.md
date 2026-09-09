@@ -134,8 +134,18 @@ panel renders a dash rather than a zero that looks like real data.
 
 The reclaim list only ever offers user-owned GUI applications: a process counts
 when it owns a window on the compositor. To appear in the Idle Apps table it must
-also be below the idle CPU threshold, hold at least the idle memory threshold,
-not be the focused window, and not be a system component.
+meet *all* of these at the moment of the survey:
+
+- owned by the desktop user (uid matches yours)
+- has a display connection (`DISPLAY` or `WAYLAND_DISPLAY` in its environment)
+- using at most **1%** of a core over the sample window (`HW_IDLE_CPU`)
+- holding at least **150 MiB** resident (`HW_IDLE_MEM_MIB`)
+- **not** the currently focused window
+- **not** on the protect list below
+
+So a long-open, unfocused browser qualifies the moment it drops under the CPU
+ceiling — a browser that just loaded a tab (4-5% core) does not. There is no
+timeout: "idle" is a point-in-time snapshot, not something that accrues.
 
 `proc-probe` keeps an auditable protect list of things an optimizer must never
 offer to take down — the compositor and shell themselves, the audio and
