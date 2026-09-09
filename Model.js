@@ -74,7 +74,15 @@ function parseCpuJiffies(raw) {
   // iowait is time with nothing to run, so it belongs with idle rather than
   // being charged to a process — this matches what top and btop report.
   var idle = toNumber(parts[4]) + toNumber(parts[5])
-  return { total: total, idle: idle }
+  // The stack the graph plots: user+nice is userland, system+irq+softirq is
+  // the kernel, iowait is space waiting on the disk. Each is a delta share.
+  return {
+    total: total,
+    idle: idle,
+    user: toNumber(parts[1]) + toNumber(parts[2]),
+    system: toNumber(parts[3]) + toNumber(parts[6]) + toNumber(parts[7]),
+    iowait: toNumber(parts[5])
+  }
 }
 
 // Usage is a ratio of jiffie deltas, not of wall-clock time, so an uneven
@@ -85,6 +93,23 @@ function cpuUsage(previous, current) {
   var idleDelta = current.idle - previous.idle
   if (totalDelta <= 0) return -1
   return clamp(100 * (1 - idleDelta / totalDelta), 0, 100)
+}
+
+// Per-component deltas as percentages of machine capacity, so the three
+// values stack to roughly the busy figure. `busy` is the headline number.
+function cpuStack(previous, current) {
+  if (!previous || !current) return null
+  var totalDelta = current.total - previous.total
+  if (totalDelta <= 0) return null
+  function share(a, b) {
+    return clamp(100 * (b - a) / totalDelta, 0, 100)
+  }
+  return {
+    user: share(previous.user, current.user),
+    system: share(previous.system, current.system),
+    iowait: share(previous.iowait, current.iowait),
+    busy: cpuUsage(previous, current)
+  }
 }
 
 // Average current clock across every thread. /proc/cpuinfo is the one place
@@ -121,14 +146,26 @@ function parseMemory(raw) {
   if (available <= 0) available = field("MemFree") + field("Buffers") + field("Cached")
 
   var swapTotal = field("SwapTotal")
+  var free = field("MemFree")
+  var buffers = field("Buffers")
+  var cached = field("Cached") + field("SReclaimable")
+  // "apps" is what free calls used minus buffers/cache: anonymous pages that
+  // only look cheap because the kernel can reclaim the file cache. The three
+  // buckets below sum to about MemTotal; the spare is unmapped free memory.
+  var apps = total - free - buffers - cached
   return {
     totalKib: total,
     availableKib: available,
     usedKib: Math.max(0, total - available),
-    cachedKib: field("Cached") + field("SReclaimable"),
+    buffersKib: buffers,
+    cachedKib: cached,
+    usedAppsKib: Math.max(0, apps),
     swapTotalKib: swapTotal,
     swapUsedKib: Math.max(0, swapTotal - field("SwapFree")),
-    percent: clamp(100 * (total - available) / total, 0, 100)
+    percent: clamp(100 * (total - available) / total, 0, 100),
+    usedPct: clamp(100 * apps / total, 0, 100),
+    bufferPct: clamp(100 * buffers / total, 0, 100),
+    cachePct: clamp(100 * cached / total, 0, 100)
   }
 }
 

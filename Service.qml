@@ -69,6 +69,12 @@ Item {
   // lightweight pusher so the graphs glide instead of stepping between ticks.
   // File reads still happen on intervalSec; history just duplicates the latest
   // reading in between, so buffering costs nothing but an array push.
+  // Rolling history of the last 60 seconds, sampled once a second by a
+  // lightweight pusher so the graphs glide instead of stepping between ticks.
+  // File reads still happen on intervalSec; history just duplicates the latest
+  // reading in between, so buffering costs nothing but an array push.
+  // CPU entries carry the {user, system, iowait} stack; memory entries carry
+  // the {apps, cache, buffers} buckets. Temperature/fan stay scalar.
   property var cpuHistory: []
   property var memHistory: []
   property var tempHistory: []
@@ -127,18 +133,18 @@ Item {
     probeProcess.running = true
   }
 
-  function pushHistory(cpu, mem) {
+  function pushHistory(cpuStack, memory) {
     var cap = root.historyCap
     var c = root.cpuHistory.slice()
-    if (isFinite(cpu) && cpu >= 0) {
-      c.push(cpu)
+    if (cpuStack && isFinite(cpuStack.user) && cpuStack.user >= 0) {
+      c.push({ user: cpuStack.user, system: cpuStack.system, iowait: cpuStack.iowait })
       if (c.length > cap) c.shift()
     }
     root.cpuHistory = c
 
     var m = root.memHistory.slice()
-    if (isFinite(mem) && mem >= 0) {
-      m.push(mem)
+    if (memory && isFinite(memory.usedPct) && memory.usedPct >= 0) {
+      m.push({ apps: memory.usedPct, cache: memory.cachePct, buffer: memory.bufferPct })
       if (m.length > cap) m.shift()
     }
     root.memHistory = m
@@ -167,9 +173,10 @@ Item {
   function sample() {
     statFile.reload()
     var jiffies = Model.parseCpuJiffies(statFile.text())
+    var stack = null
     if (jiffies) {
-      var usage = Model.cpuUsage(_prevJiffies, jiffies)
-      if (usage >= 0) cpuPercent = usage
+      stack = Model.cpuStack(_prevJiffies, jiffies)
+      if (stack) cpuPercent = stack.busy
       _prevJiffies = jiffies
     }
 
@@ -177,7 +184,7 @@ Item {
     var parsed = Model.parseMemory(memFile.text())
     if (parsed) memory = parsed
 
-    root.pushHistory(cpuPercent, parsed ? parsed.percent : -1)
+    root.pushHistory(stack, parsed)
 
     cpuinfoFile.reload()
     var mhz = Model.averageMhz(cpuinfoFile.text())
@@ -416,7 +423,18 @@ Item {
     interval: 1000
     running: root.active
     repeat: true
-    onTriggered: root.pushHistory(root.cpuPercent, root.memPercent)
+    // Re-push the latest reading each tick so the graph fills smoothly
+    // between the intervalSec file reads (which also short-circuit here).
+    onTriggered: {
+      var c = root.cpuHistory.slice()
+      if (c.length > 0) c.push(c[c.length - 1])
+      if (c.length > root.historyCap) c.shift()
+      root.cpuHistory = c
+      var m = root.memHistory.slice()
+      if (m.length > 0) m.push(m[m.length - 1])
+      if (m.length > root.historyCap) m.shift()
+      root.memHistory = m
+    }
   }
 
   function start() {

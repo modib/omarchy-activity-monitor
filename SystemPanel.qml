@@ -43,7 +43,12 @@ KeyboardPanel {
   // Heaviest CPU only counts processes pulling more than 10% of a core;
   // Heaviest Memory only counts processes above 200 MiB resident. Both lists
   // still cap rows so the panel stays short.
-  function sliceProcessList(report, key, filter) {
+  //
+  // `topup` guarantees the section never renders empty: when fewer processes
+  // pass the filter, the remaining slots are filled with the top rows anyway.
+  // That keeps at least one Quit / Force affordance on screen no matter how
+  // idle the machine is.
+  function sliceProcessList(report, key, filter, topup) {
     var arr = report && report.ok ? report[key] : []
     if (arr === undefined || arr === null) arr = []
     var out = []
@@ -51,15 +56,23 @@ KeyboardPanel {
       if (filter && !filter(arr[i])) continue
       out.push(arr[i])
     }
+    if (topup && arr.length > out.length) {
+      var seen = {}
+      for (var j = 0; j < out.length; j++) seen[out[j].pid] = 1
+      for (var k = 0; k < arr.length && out.length < root.sectionRows; k++) {
+        if (seen[arr[k].pid]) continue
+        out.push(arr[k])
+      }
+    }
     return out
   }
 
   readonly property var processCpuList: sliceProcessList(hw.processReport, "cpu", function(e) {
     return e && isFinite(e.cpuPct) && e.cpuPct > 10
-  })
+  }, true)
   readonly property var processMemList: sliceProcessList(hw.processReport, "mem", function(e) {
     return e && isFinite(e.rssKib) && e.rssKib > 204800
-  })
+  }, true)
   readonly property var processIdleList: sliceProcessList(hw.processReport, "idle")
 
   // Owner uid reported by proc-probe's meta line. Only a process owned by this
@@ -538,7 +551,12 @@ Text {
           HistoryGraph {
             title: "CPU"
             userWidth: (parent.width - parent.spacing) / 2
-            values: hw.cpuHistory
+            seriesValues: hw.cpuHistory
+            seriesSpec: [
+              { key: "user",   label: "user",   color: Color.accent },
+              { key: "system", label: "system", color: root.hotColor },
+              { key: "iowait", label: "iowait", color: root.warm(root.baseColor, 0.65) }
+            ]
             currentText: hw.cpuPercent >= 0 ? (Math.round(hw.cpuPercent) + "%") : "–"
             currentColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
           }
@@ -546,9 +564,14 @@ Text {
           HistoryGraph {
             title: "Memory"
             userWidth: (parent.width - parent.spacing) / 2
-            values: hw.memHistory
-            currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "%") : "–"
-            currentColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
+            seriesValues: hw.memHistory
+            seriesSpec: [
+              { key: "apps",   label: "apps",   color: root.hotColor },
+              { key: "cache",  label: "cache",  color: Color.accent },
+              { key: "buffer", label: "buffers", color: root.warm(root.baseColor, 0.65) }
+            ]
+            currentText: hw.memory && hw.memory.usedPct >= 0 ? (Math.round(hw.memory.usedPct) + "%") : (hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "%") : "–")
+            currentColor: root.warm(root.baseColor, Model.severity(hw.memory ? hw.memory.usedPct : hw.memPercent, root.warnPercent, root.criticalPercent))
           }
         }
 
@@ -626,6 +649,7 @@ Text {
                 width: parent.width
 
                 Text {
+                  id: vramLabel
                   textFormat: Text.PlainText
                   text: "VRAM"
                   color: Qt.darker(root.baseColor, 1.4)
@@ -635,11 +659,12 @@ Text {
                 }
 
                 Item {
-                  width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth)
+                  width: Math.max(0, parent.width - vramLabel.implicitWidth - vramValue.implicitWidth)
                   height: 1
                 }
 
                 Text {
+                  id: vramValue
                   textFormat: Text.PlainText
                   text: hw.gpuVramTotalBytes > 0 ? (Model.formatGib(Model.gibFromBytes(hw.gpuVramUsedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(hw.gpuVramTotalBytes)) + " GiB (" + Math.round(hw.gpuVramPercent) + "%)") : "–"
                   color: root.warm(root.baseColor, Model.severity(hw.gpuVramPercent, root.warnPercent, root.criticalPercent))
@@ -813,6 +838,7 @@ Text {
         spacing: Style.space(6)
 
         Text {
+          id: secGlyph
           textFormat: Text.PlainText
           text: section.glyph
           color: Color.accent
@@ -822,6 +848,7 @@ Text {
         }
 
         Text {
+          id: secTitle
           textFormat: Text.PlainText
           text: section.title
           color: root.baseColor
@@ -833,14 +860,15 @@ Text {
 
         Item {
           width: Math.max(0, parent.width
-            - parent.children[0].implicitWidth
-            - parent.children[1].implicitWidth
-            - parent.children[3].implicitWidth
+            - secGlyph.implicitWidth
+            - secTitle.implicitWidth
+            - secCount.implicitWidth
             - parent.spacing * 3)
           height: 1
         }
 
         Text {
+          id: secCount
           textFormat: Text.PlainText
           text: section.showMeta && root.idleCount > 0 ? (root.idleCount + " idle") : ""
           color: root.idleCount > 0 ? root.warm(root.baseColor, 0.5) : root.dimColor
@@ -892,11 +920,22 @@ Text {
     id: graph
     property string title: ""
     property var values: []
+    // Stacked mode: `seriesValues` holds one object per sample with a numeric
+    // field per series (say {user, system, iowait}), and `seriesSpec` lists
+    // them bottom-up as {key, label, color}. Plain scalar mode uses `values`.
+    property var seriesValues: null
+    property var seriesSpec: null
     property string currentText: ""
     property color currentColor: Color.accent
     // Explicit width given by a grid cell; -1 keeps the old full-width look.
     property real userWidth: -1
     property string placeholder: "collecting samples…"
+
+    readonly property bool stacked: graph.seriesValues !== null && graph.seriesValues !== undefined
+      && graph.seriesSpec !== null && graph.seriesSpec !== undefined && graph.seriesSpec.length > 0
+    readonly property int sampleCount: graph.stacked
+      ? (graph.seriesValues ? graph.seriesValues.length : 0)
+      : (graph.values ? graph.values.length : 0)
 
     width: graph.userWidth >= 0 ? graph.userWidth : parent.width
     implicitHeight: graphCol.implicitHeight + Style.space(24)
@@ -915,6 +954,7 @@ Text {
         width: parent.width
 
         Text {
+          id: hgTitle
           textFormat: Text.PlainText
           text: graph.title
           color: root.baseColor
@@ -924,11 +964,12 @@ Text {
         }
 
         Item {
-          width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth)
+          width: Math.max(0, parent.width - hgTitle.implicitWidth - hgCur.implicitWidth)
           height: 1
         }
 
         Text {
+          id: hgCur
           textFormat: Text.PlainText
           text: graph.currentText
           color: graph.currentColor
@@ -943,8 +984,30 @@ Text {
         width: parent.width
         height: Style.space(55)
 
-        readonly property int cols: Math.max(1, graph.values ? graph.values.length : 0)
-        readonly property real colWidth: width / cols
+        readonly property int cols: graph.stacked
+          ? (graph.seriesValues ? graph.seriesValues.length : 0)
+          : (graph.values ? graph.values.length : 0)
+        readonly property real colWidth: width / Math.max(1, cols)
+
+        // Stacked helpers: `stackPct` clamps one series to 0..100% of machine
+        // capacity, `stackBasePx` sums the pixel height of every series below
+        // `upTo` in the *column* named by `colIndex`.
+        function stackPct(colIndex, key) {
+          var samples = graph.seriesValues
+          if (!samples || colIndex < 0 || colIndex >= samples.length) return 0
+          var entry = samples[colIndex]
+          if (!entry) return 0
+          var v = Number(entry[key])
+          return isFinite(v) ? Math.max(0, Math.min(100, v)) : 0
+        }
+        function stackBasePx(colIndex, upTo) {
+          var hgt = 0
+          var specs = graph.seriesSpec
+          for (var i = 0; i < upTo && i < specs.length; i++) {
+            hgt += Math.round(graphArea.height * graphArea.stackPct(colIndex, specs[i].key) / 100)
+          }
+          return hgt
+        }
 
         // Bottom-up ramp shared by every column: the base of a column is the
         // urgent red, fading up through orange into a translucent accent tint,
@@ -967,23 +1030,24 @@ Text {
         Text {
           textFormat: Text.PlainText
           anchors.centerIn: parent
-          visible: graph.values.length < 2
+          visible: graphArea.cols < 2
           text: graph.placeholder
           color: root.dimColor
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
         }
 
-        // Square-block columns: each sample is a stack of square pixels rising
-        // from the baseline. No gradient shaders and no per-column animation —
-        // just rows of flat-coloured rects, which keeps two graphs cheap for
-        // the life of the session.
+        // Two renderers share this area. Stacked mode draws each series as a
+        // full-width horizontal segment per column (used by the CPU and memory
+        // graphs); scalar mode keeps the square-pixel columns (temperature,
+        // fan speed). No shaders, no per-column animation — a few flat rects.
         Repeater {
           width: graphArea.width
           height: graphArea.height
           model: graphArea.cols
           delegate: Item {
             id: col
+            readonly property int colIndex: index
             readonly property real sample: {
               var raw = Number(graph.values[index] || 0)
               return Math.max(0, Math.min(100, raw))
@@ -996,6 +1060,7 @@ Text {
             clip: true
 
             Repeater {
+              visible: !graph.stacked
               model: Math.max(0, col.blocks)
               delegate: Rectangle {
                 width: graphArea.block
@@ -1004,6 +1069,52 @@ Text {
                 y: graphArea.height - (index + 1) * graphArea.stride
                 color: graphArea.rampColor((index + 0.5) / Math.max(1, col.blocks))
               }
+            }
+
+            Repeater {
+              visible: graph.stacked
+              model: graph.stacked ? graph.seriesSpec.length : 0
+              delegate: Rectangle {
+                readonly property int sIndex: index
+                readonly property real sPct: graphArea.stackPct(col.colIndex, graph.seriesSpec[sIndex].key)
+                readonly property real cBase: graphArea.stackBasePx(col.colIndex, sIndex)
+                readonly property color sc: graph.seriesSpec[sIndex].color
+
+                width: col.width
+                x: 0
+                height: Math.max(0, Math.round(graphArea.height * sPct / 100) - (sIndex > 0 ? 1 : 0))
+                y: graphArea.height - cBase - height
+                visible: height >= 1
+                color: Qt.rgba(sc.r, sc.g, sc.b, 0.9)
+              }
+            }
+          }
+        }
+      }
+
+      // Compact legend for stacked graphs only; scalar graphs stay clean.
+      Row {
+        width: parent.width
+        visible: graph.stacked
+        spacing: Style.space(10)
+        Repeater {
+          model: graph.stacked ? graph.seriesSpec : 0
+          delegate: Row {
+            spacing: Style.space(4)
+            Rectangle {
+              width: Style.space(7)
+              height: Style.space(7)
+              radius: 2
+              anchors.verticalCenter: parent.verticalCenter
+              color: modelData.color
+            }
+            Text {
+              textFormat: Text.PlainText
+              text: modelData.label || modelData.key
+              color: root.dimColor
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              anchors.verticalCenter: parent.verticalCenter
             }
           }
         }
@@ -1026,6 +1137,13 @@ Text {
     signal forceRequested()
     signal confirmed()
     signal cancelled()
+
+    // Fixed width of the trailing action column (chips or the pending Yes/No).
+    // A named constant keeps the elided args binding honest: the old
+    // `parent.children[3].width` form resolved to zero because it evaluated
+    // before child 3 existed, so the cmdline swallowed the whole row and the
+    // chips were pushed past the panel's right edge.
+    readonly property real actionsWidth: Style.space(88)
 
     implicitWidth: parent.width
     height: prowRow.implicitHeight + Style.space(8)
@@ -1077,7 +1195,7 @@ Text {
         width: Math.max(0, parent.width
           - Style.space(52)
           - prowComm.implicitWidth
-          - parent.children[3].width
+          - prow.actionsWidth
           - parent.spacing * 3)
         elide: Text.ElideRight
         text: entry && entry.args !== "" && entry.args !== entry.comm ? String(entry.args) : ""
@@ -1089,9 +1207,13 @@ Text {
 
       // Action column: Quit / Force only exist for processes owned by the
       // desktop user — everything else is the OS's, not yours, and gets a
-      // "system" tag instead of a kill affordance.
+      // "system" tag instead of a kill affordance. The explicit implicitHeight
+      // makes the row grow to fit the chips instead of letting them overflow
+      // a text-height row.
       Item {
-        width: Style.space(88)
+        id: prowAction
+        width: prow.actionsWidth
+        implicitHeight: Style.space(22)
 
         Row {
           anchors.right: parent.right
@@ -1202,6 +1324,7 @@ Text {
     spacing: Style.space(8)
 
     Text {
+      id: ipLabel
       textFormat: Text.PlainText
       text: infoPairRoot.label
       color: Qt.darker(root.baseColor, 1.4)
@@ -1211,11 +1334,12 @@ Text {
     }
 
     Item {
-      width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth - parent.spacing * 2)
+      width: Math.max(0, parent.width - ipLabel.implicitWidth - ipValue.implicitWidth - parent.spacing * 2)
       height: 1
     }
 
     Text {
+      id: ipValue
       textFormat: Text.PlainText
       text: infoPairRoot.value
       color: infoPairRoot.valueColor
