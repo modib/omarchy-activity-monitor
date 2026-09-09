@@ -30,9 +30,9 @@ KeyboardPanel {
   property string tempFormat: "degree-unit"
   property bool settingsOpen: false
 
-  // Process list state. Three fixed lists (Heaviest CPU, Heaviest Memory,
-  // Idle Apps) each capped at a handful of rows; pending* is the one-shot
-  // confirm state for a kill offered on any row.
+  // Process list state. Two fixed lists (Heaviest CPU, Heaviest Memory) each
+  // capped at a handful of rows; pending* is the one-shot confirm state for a
+  // kill offered on any row.
   property int topProcessCount: 15
   property int cpuThresholdPct: 10
   property int memThresholdMib: 0
@@ -76,13 +76,10 @@ KeyboardPanel {
   readonly property var processMemList: sliceProcessList(hw.processReport, "mem", function(e) {
     return e && isFinite(e.rssKib) && e.rssKib > root.memThresholdKib
   })
-  readonly property var processIdleList: sliceProcessList(hw.processReport, "idle")
 
   // Owner uid reported by proc-probe's meta line. Only a process owned by this
   // uid may ever be offered a Quit / Force action.
   readonly property int ownUid: hw.processReport && hw.processReport.uid !== undefined ? hw.processReport.uid : -1
-
-  readonly property int idleCount: hw.processReport && hw.processReport.ok ? hw.processReport.idle.length : -1
 
   function requestAction(entry, signal) {
     if (!entry || entry.uid !== root.ownUid) return
@@ -724,8 +721,8 @@ Text {
           }
         }
 
-        // Three short process lists — Heaviest CPU, Heaviest Memory, Idle Apps — are
-        // the reason the panel exists. Every row offers consent-confirmed
+        // Two short process lists — Heaviest CPU, Heaviest Memory — are the
+        // reason the panel exists. Every row offers consent-confirmed
         // Quit / Force actions.
         Text {
           textFormat: Text.PlainText
@@ -752,15 +749,6 @@ Text {
           listModel: root.processMemList
           scope: "mem"
           emptyText: "No process is over " + root.memShowMib + " MiB resident right now."
-        }
-
-        ProcessSection {
-          title: "Idle Apps"
-          glyph: "\uF2A3"
-          listModel: root.processIdleList
-          scope: "idle"
-          emptyText: "Nothing qualifies right now — idle apps need ≤1% core, ≥150 MiB RAM, a window, no focus, and no terminal."
-          showMeta: true
         }
 
         // Bottom breathing room spacer to guarantee zero clipping
@@ -824,7 +812,6 @@ Text {
     property var listModel: []
     property string scope: "cpu"
     property string emptyText: ""
-    property bool showMeta: false
 
     width: parent.width
     implicitHeight: scCol.implicitHeight + Style.space(24)
@@ -868,20 +855,8 @@ Text {
           width: Math.max(0, parent.width
             - secGlyph.implicitWidth
             - secTitle.implicitWidth
-            - secCount.implicitWidth
-            - parent.spacing * 3)
+            - parent.spacing * 2)
           height: 1
-        }
-
-        Text {
-          id: secCount
-          textFormat: Text.PlainText
-          text: section.showMeta && root.idleCount > 0 ? (root.idleCount + " idle") : ""
-          color: root.idleCount > 0 ? root.warm(root.baseColor, 0.5) : root.dimColor
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          font.bold: true
-          anchors.verticalCenter: parent.verticalCenter
         }
       }
 
@@ -1087,7 +1062,7 @@ Text {
   component ProcessRow: Rectangle {
     id: prow
     property var entry: null
-    property string scope: "idle"
+    property string scope: "cpu"
     property bool isUser: true
     property bool pending: false
     property string pendingSignal: ""
@@ -1131,8 +1106,8 @@ Text {
       anchors.margins: Style.space(4)
       spacing: Style.space(10)
 
-      // Scope-specific metric, highlighted: CPU% for the Heaviest CPU and Idle Apps
-      // lists, resident memory for Heaviest Memory. Single line of type, name,
+      // Scope-specific metric, highlighted: CPU% for the Heaviest CPU list,
+      // resident memory for Heaviest Memory. Single line of type, name,
       // then cmdline.
       Text {
         textFormat: Text.PlainText

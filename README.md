@@ -2,8 +2,10 @@
 
 A system activity monitor for the Omarchy bar. CPU, memory, GPU, temperature, and
 fan are read straight from `/proc` and `/sys` and rendered as sleek icon
-readouts; one click opens a keyboard-driven panel with live history graphs, the
-current heaviest processes, and the idle apps you can reclaim.
+readouts; one click opens a keyboard-driven panel with live history graphs and
+the current heaviest processes. Quit and Force are offered only on your own
+processes, only while you hover — never on system-owned rows and never without
+an explicit consent prompt.
 
 ![The Activity Monitor panel](assets/preview-panel.png)
 
@@ -22,14 +24,14 @@ current heaviest processes, and the idle apps you can reclaim.
   **user / system / iowait** and memory by **apps / cache / buffers**, so the
   breakdown is visible without a legend cluttering the cards. Buffered
   continuously in the background, so the panel opens already populated.
-- **Process lists** — Heaviest CPU (anything above the CPU threshold), Heaviest
-  Memory (anything above the memory threshold), and Idle Apps (the reclaimable
-  GUI apps), one row each with the highlighted metric, the app name, and the
-  full command line. Thresholds keep the lists short: a quiet machine shows few
-  or no rows instead of padding, and an empty list says exactly that — the CPU
-  list reports "No process is over N% core right now." and the memory list
-  reports "No process is over N MiB resident right now.". `topProcessCount`,
-  `cpuThresholdPct`, and `memThresholdMib` tune the length.
+- **Process lists** — Heaviest CPU (anything above the CPU threshold) and
+  Heaviest Memory (anything above the memory threshold), one row each with the
+  highlighted metric, the app name, and the full command line. Thresholds keep
+  the lists short: a quiet machine shows few or no rows instead of padding, and
+  an empty list says exactly that — the CPU list reports "No process is over N%
+  core right now." and the memory list reports "No process is over N MiB
+  resident right now.". `topProcessCount`, `cpuThresholdPct`, and
+  `memThresholdMib` tune the length.
 - **Quiet, on your own processes** — rows belonging to the OS keep a faint
   tinted background and never carry actions; your own rows stay plain until you
   hover, when a subtle **Quit** (SIGTERM) / **Force** (SIGKILL) pair appears
@@ -75,9 +77,9 @@ The panel is keyboard-driven and anchored to the widget:
   legend row.
 - **Graphics metrics** — card name, load, temperature, VRAM meter, power,
   fan, and core clock (only when a card is present).
-- **Heaviest CPU / Heaviest Memory / Idle Apps** — capped lists of the moment's
-  heaviest consumers. OS rows are tinted read-only; hovering your own rows
-  reveals **Quit** / **Force**.
+- **Heaviest CPU / Heaviest Memory** — capped lists of the moment's heaviest
+  consumers. OS rows are tinted read-only and can never be touched; hovering
+  your own rows reveals **Quit** / **Force**.
 - **Keyboard** — `Escape` closes, `Tab`/`Shift+Tab` switch panels, `r` resamples,
   `c`/`f` toggle °C/°F.
 
@@ -107,7 +109,7 @@ figure.
 | GPU | its own `sysfs` counter | load, edge temperature, VRAM, board power, fan, core clock |
 | GPU (NVIDIA) | `nvidia-smi` | the same telemetry, polled on the same interval |
 | Load average | `/proc/loadavg` | 1/5/15 minute |
-| Processes | [`proc-probe`](proc-probe) survey | Heaviest CPU, Heaviest Memory, and Idle Apps |
+| Processes | [`proc-probe`](proc-probe) survey | Heaviest CPU and Heaviest Memory |
 
 ## How it samples
 
@@ -122,7 +124,8 @@ Process accounting is the exception — there is no single file, it is a few
 hundred `/proc/<pid>/stat` directories. [`proc-probe`](proc-probe), bash with no
 external calls in the hot loop, takes two snapshots a second apart, computes
 per-process CPU the way `top` does (delta against the whole machine's tick
-count), and emits the three tables as a small TSV report. Its output replaces
+count), and emits the two ranking tables as a small TSV report. Its output
+replaces
 the panel's lists atomically.
 
 `blockAllReads` is set on those views deliberately: without it `reload()` is
@@ -138,30 +141,22 @@ See what the probe found on this machine:
 A sensor missing from that output is one this machine does not expose, and the
 panel renders a dash rather than a zero that looks like real data.
 
-## What counts as "idle"
+## Who gets a kill action
 
-The reclaim list only ever offers user-owned GUI applications: a process counts
-when it owns a window on the compositor. To appear in the Idle Apps table it must
-meet *all* of these at the moment of the survey:
+The panel never guesses what is safe to close. Every listed row is a factual,
+read-only ranking; a kill is only ever *offered* — and only where it cannot
+hurt what you are using:
 
-- owned by the desktop user (uid matches yours)
-- has a display connection (`DISPLAY` or `WAYLAND_DISPLAY` in its environment)
-- using at most **1%** of a core over the sample window (`HW_IDLE_CPU`)
-- holding at least **150 MiB** resident (`HW_IDLE_MEM_MIB`)
-- **not** the currently focused window
-- **not** on the protect list below
+- only rows owned by the desktop user can be acted on at all; OS rows are
+  tinted and inert.
+- a **Quit** (SIGTERM) / **Force** (SIGKILL) pair appears only while you hover
+  your own row, never persistently.
+- acting requires the in-panel **Yes** confirmation, which expires on its own.
 
-So a long-open, unfocused browser qualifies the moment it drops under the CPU
-ceiling — a browser that just loaded a tab (4-5% core) does not. There is no
-timeout: "idle" is a point-in-time snapshot, not something that accrues.
-
-`proc-probe` keeps an auditable protect list of things an optimizer must never
-offer to take down — the compositor and shell themselves, the audio and
-notification stacks, `systemd` units, portals, dbus, terminals, and network
-helpers. Kernel threads (children of `kthreadd`) never appear at all. The quit
-and force actions are plain `SIGTERM`/`SIGKILL` on the pid, launched from the
-shell, shown only for your own processes and only while you hover the row, and
-are only reachable after an in-panel confirmation that expires on its own.
+There is deliberately no "apps you could reclaim" list — an audio-playing
+browser or a background download you forgot about looks exactly like an idle
+GUI app, so anything that guesses is a trap. The ranking lists only observe;
+ending a process is your own decision, confirmed twice.
 
 ## Settings
 
@@ -227,8 +222,8 @@ omarchy-shell modib.activity-monitor status     # full telemetry breakdown
 
 - A Nerd Font for the glyphs (Omarchy ships one)
 - `bash` for the two probe scripts
-- `hyprctl` and `jq` for idle-window detection and the GPU probe
-- `coreutils` (`kill`) for the reclaim actions
+- `hyprctl` and `jq` for the GPU probe
+- `coreutils` (`kill`) for the consent-confirmed kill actions
 - `pciutils` (`lspci`) — optional, to name the GPU card in the panel
 - `nvidia-smi` — only for NVIDIA cards
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# proc-probe — a periodic survey of the highest CPU consumers, the largest
-# memory users, and the idle GUI apps this machine could reclaim.
+# proc-probe — a periodic survey of the highest CPU and memory consumers.
 #
 # The activity-monitor plugin reads /proc directly for its telemetry, but
 # process accounting is not one file — it is a few hundred directories' worth —
@@ -15,32 +14,14 @@
 #   meta\t<unix-ts>\t<ncpus>\t<active-pid>\t<owner-uid>
 #   cpu\t<pid>\t<comm>\t<cpu%>\t<rssKb>\t<uid>\t<args>
 #   mem\t[...]
-#   idle\t[...]
 #
 # Env knobs (all optional):
 #   HW_TOP_N         how many rows in the cpu / mem lists       (default 15)
-#   HW_IDLE_CPU      max cpu% an app may use and still be idle   (default 1)
-#   HW_IDLE_MEM_MIB  min memory (MiB) before an app is worth it  (default 150)
-#   HW_PROTECT_EXTRA comma-separated comms added to the protect list
-#
-# An app counts as "idle" when ALL of these hold:
-#   - it belongs to the invoking user (userspace only, like the kill actions)
-#   - it has a display connection (DISPLAY or WAYLAND_DISPLAY in environ)
-#   - it used <= HW_IDLE_CPU% of a core over the sample window
-#   - it holds >= HW_IDLE_MEM_MIB MiB resident (ignore tiny helpers)
-#   - it is not currently the focused window
-#   - it is not on the protect list (compositor, shell, pipewire, terminals…)
-#
-# The protect list exists so an optimizer never offers to take down the thing
-# it runs in, or a terminal with active work in it. Everything there is a
-# deliberate, auditable default.
 
 export LC_ALL=C
 set -u
 
 TOP_N=${HW_TOP_N:-15}
-IDLE_CPU=${HW_IDLE_CPU:-1}
-IDLE_MEM_KB=$(( (${HW_IDLE_MEM_MIB:-150}) * 1024 ))
 
 ME=$(id -u)
 
@@ -126,39 +107,10 @@ read -r TICKS2 NCPUS <<< "$t2"
 TICKS_TOTAL=$(( (TICKS2 > TICKS1 ? TICKS2 : TICKS1) - TICKS1 ))
 (( TICKS_TOTAL > 0 )) || TICKS_TOTAL=1
 
-# The focused window, so the optimizer never proposes the app in view.
+# No focused-window or consume-idle logic — with the Idle Apps table gone the
+# probe only ranks CPU and memory consumers, both view-only with consent-gated
+# kill actions.
 ACTIVE_PID=0
-if command -v hyprctl >/dev/null 2>&1 \
-  && command -v jq >/dev/null 2>&1; then
-  ACTIVE_PID=$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid' 2>/dev/null)
-  [[ $ACTIVE_PID =~ ^[0-9]+$ ]] || ACTIVE_PID=0
-fi
-
-# ------------------------------------------------------------------- protect
-
-protect() {
-  printf '%s\n' \
-    Hyprland hyprland quickshell omarchy-shell qs omarchy-shell.bin shell \
-    systemd systemd-udevd systemd-journal systemd-logind systemd-networkd \
-    systemd-resolved systemd-user systemd-timedated systemd-coredump \
-    pipewire pipewire-pulse wireplumber dbus-daemon dbus-broker \
-    polkitd polkit-gnome Xwayland xdg-desktop-portal xdg-desktop-portal-gtk \
-    xdg-desktop-portal-hyprland xdg-document-portal xdg-permission-portal \
-    foot kitty alacritty ghostty wezterm konsole gnome-terminal \
-    NetworkManager wpa_supplicant bluetoothd udisksd sshd gamescope \
-    $1
-}
-
-IFS=, read -ra EXTRA <<< "${HW_PROTECT_EXTRA:-}"
-mapfile -t PROTECTED < <(protect "${EXTRA[*]}")
-
-in_protected() {
-  local name=$1 p
-  for p in "${PROTECTED[@]}"; do
-    [[ $name == "$p" ]] && return 0
-  done
-  return 1
-}
 
 # ------------------------------------------------------------------- reduce
 
@@ -202,20 +154,6 @@ row() {
     "${RSS1[$pid]:-0}" "${UID1[$pid]:--1}" "${ARGS1[$pid]:-}"
 }
 
-# Pids that currently own a window on the compositor. `ss -xap` cannot reveal
-# wayland clients here (Hyprland owns both ends of each connection), and
-# /proc/<pid>/environ never carries DISPLAY/WAYLAND_DISPLAY under uwsm, so the
-# compositor's own window table is the one reliable "this is a GUI app" signal.
-has_display() {
-  case " $WINDOW_PIDS " in
-    *" $1 "*) return 0 ;;
-  esac
-  return 1
-}
-
-WINDOW_PIDS="$(hyprctl clients -j 2>/dev/null | jq -r '.[].pid | tostring' 2>/dev/null | tr '\n' ' ')"
-[[ -n ${HW_DEBUG:+x} ]] && printf 'dbg\twindows=[%s]\n' "$WINDOW_PIDS" >&2
-
 printf 'meta\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$NCPUS" "$ACTIVE_PID" "$ME"
 
 # top cpu — any user, a root process can genuinely hog a core
@@ -234,21 +172,4 @@ done
   done
 } | sort -nr -t $'\t' -k1,1 | head -n "$TOP_N" | while IFS=$'\t' read -r _ pid; do
   row mem "$pid"
-done
-
-# idle GUI apps the user could reclaim
-{
-  for pid in "${PIDS[@]}"; do
-    [[ ${UID1[$pid]} =~ ^[0-9]+$ ]] || continue
-    [[ ${RSS1[$pid]} =~ ^[0-9]+$ ]] || continue
-    [[ ${UID1[$pid]} -eq $ME ]] || continue
-    [[ ${RSS1[$pid]} -ge $IDLE_MEM_KB ]] || continue
-    (( CPU[$pid] <= IDLE_CPU )) || continue
-    [[ $pid == "$ACTIVE_PID" ]] && continue
-    in_protected "${COMM1[$pid]}" && continue
-    has_display "$pid" || continue
-    printf '%s\t%s\n' "${RSS1[$pid]}" "$pid"
-  done
-} | sort -nr -t $'\t' -k1,1 | while IFS=$'\t' read -r _ pid; do
-  row idle "$pid"
 done

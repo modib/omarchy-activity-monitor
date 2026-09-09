@@ -92,9 +92,9 @@ Item {
   readonly property real gpuVramPercent: gpuVramTotalBytes > 0
     ? Model.clamp(100 * gpuVramUsedBytes / gpuVramTotalBytes, 0, 100) : -1
 
-  // The process readouts behind the popup's Heaviest CPU, Heaviest Memory, and
-  // Idle Apps lists. processReport is replaced wholesale by the last completed
-  // proc-probe run; every consumer binds to it read-only.
+  // The process readouts behind the popup's Heaviest CPU and Heaviest Memory
+  // lists. processReport is replaced wholesale by the last completed proc-probe
+  // run; every consumer binds to it read-only.
   property var processReport: Model.parseProcessReport("")
   readonly property int processIntervalSec: intSetting("processProbeIntervalSec", 8, 3, 60)
   readonly property string procProbePath: pluginDir + "/proc-probe"

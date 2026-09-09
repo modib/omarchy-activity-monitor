@@ -263,10 +263,6 @@ function formatRpm(rpm) {
 //   meta\t<unix-ts>\t<ncpus>\t<active-pid>\t<owner-uid>
 //   cpu\t<pid>\t<comm>\t<cpu%>\t<rssKib>\t<uid>\t<args>
 //   mem\t[...]
-//   idle\t[...]
-//
-// The idle list is what a activity optimizer could reclaim: user-owned GUI
-// apps, low cpu, sizeable memory, not focused, not on the script's protect list.
 
 function parseProcessReport(raw) {
   var out = {
@@ -276,8 +272,7 @@ function parseProcessReport(raw) {
     activePid: 0,
     uid: -1,
     cpu: [],
-    mem: [],
-    idle: []
+    mem: []
   }
   var text = String(raw || "")
   if (text === "") return out
@@ -295,7 +290,7 @@ function parseProcessReport(raw) {
       out.nproc = toNumber(cells[2])
       out.activePid = toNumber(cells[3])
       out.uid = toNumber(cells[4], -1)
-    } else if (tag === "cpu" || tag === "mem" || tag === "idle") {
+    } else if (tag === "cpu" || tag === "mem") {
       var pid = toNumber(cells[1])
       if (pid <= 0) continue
       seen[tag] = true
