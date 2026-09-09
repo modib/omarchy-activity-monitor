@@ -1,0 +1,315 @@
+{
+  "$schema": "https://raw.githubusercontent.com/omarchy/omarchy/main/schemas/plugin.json",
+  "schemaVersion": 1,
+  "id": "modib.activity-monitor",
+  "name": "Activity Monitor",
+  "version": "1.3.0",
+  "author": "modib",
+  "license": "MIT",
+  "description": "A system activity monitor for the Omarchy bar: CPU and memory load side by side, temperature and fan RPM pinned to the right edge, and a popup panel with live history graphs plus Top CPU, Top Memory, and reclaimable idle processes.",
+  "repository": "https://github.com/modib/omarchy-activity-monitor",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "Activity Monitor",
+    "description": "CPU, RAM, GPU, temperature, and fan load as sleek icon readouts, with a popup that lists the top CPU, top memory, and idle apps you could reclaim. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
+    "category": "System",
+    "allowMultiple": true,
+    "defaultSection": "right",
+    "defaults": {
+      "mode": "icons",
+      "itemsOrder": ["gpu", "gpu-temp", "cpu", "ram", "cpu-temp", "fan"],
+      "refreshIntervalSec": 2,
+      "showGpu": true,
+      "showCpu": true,
+      "showCpuTemp": true,
+      "showGpuTemp": false,
+      "showRam": true,
+      "showFan": true,
+      "showGauges": true,
+      "showValues": false,
+      "iconSize": 0,
+      "ramFormat": "used/total",
+      "tempFormat": "degree-unit",
+      "gpu": "auto",
+      "fahrenheit": false,
+      "warnPercent": 70,
+      "criticalPercent": 90,
+      "warnTempC": 75,
+      "criticalTempC": 90,
+      "gpuIcon": "󰾲",
+      "cpuIcon": "",
+      "tempIcon": "",
+      "gpuTempIcon": "󰔏",
+      "ramIcon": "",
+      "fanIcon": "\uDB80\uDE10",
+      "clickCommand": "",
+      "percentPad": "none",
+      "monitors": [],
+      "processProbeIntervalSec": 8,
+      "topProcessCount": 5
+    },
+    "schema": [
+      {
+        "key": "mode",
+        "type": "enum",
+        "label": "Readout",
+        "options": [
+          "icons",
+          "compact",
+          "full",
+          "labels"
+        ],
+        "defaultValue": "icons",
+        "description": "icons is sleek icon + figures + temperature; compact is glyph + gauge; full adds the temperature; labels spells the readout out as words. Right-clicking the widget cycles them."
+      },
+      {
+        "key": "itemsOrder",
+        "type": "string",
+        "label": "Item sequence",
+        "defaultValue": "gpu,cpu,ram,cpu-temp,fan",
+        "description": "Order of telemetry items in the bar, comma-separated: 'gpu,cpu,ram,cpu-temp,fan' with CPU and RAM adjacent and temperature/fan on the right."
+      },
+      {
+        "key": "showGpu",
+        "type": "boolean",
+        "label": "Show GPU load",
+        "defaultValue": true,
+        "description": "Show GPU load in the top bar (hidden automatically if no GPU card is found)."
+      },
+      {
+        "key": "showCpu",
+        "type": "boolean",
+        "label": "Show CPU load",
+        "defaultValue": true,
+        "description": "Show CPU load percentage in the top bar."
+      },
+      {
+        "key": "showCpuTemp",
+        "type": "boolean",
+        "label": "Show CPU temperature",
+        "defaultValue": true,
+        "description": "Show CPU temperature with thermometer icon."
+      },
+      {
+        "key": "showGpuTemp",
+        "type": "boolean",
+        "label": "Show GPU temperature",
+        "defaultValue": false,
+        "description": "Show GPU temperature in the top bar."
+      },
+      {
+        "key": "showRam",
+        "type": "boolean",
+        "label": "Show memory",
+        "defaultValue": true,
+        "description": "Show RAM / memory usage."
+      },
+      {
+        "key": "ramFormat",
+        "type": "enum",
+        "label": "Memory format",
+        "options": [
+          "used/total",
+          "used",
+          "percent",
+          "free",
+          "available"
+        ],
+        "defaultValue": "used/total",
+        "description": "'used/total' (12/23G), 'used' (12.3G), 'percent' (52%), 'free' (11.1G), or 'available' (11.1G)."
+      },
+      {
+        "key": "tempFormat",
+        "type": "enum",
+        "label": "Temperature format",
+        "options": [
+          "degree-unit",
+          "degree",
+          "unit",
+          "unit-lower",
+          "bare"
+        ],
+        "defaultValue": "degree-unit",
+        "description": "'degree-unit' (45°C/113°F), 'degree' (45°), 'unit' (45C), 'unit-lower' (45c), or 'bare' (45)."
+      },
+      {
+        "key": "fahrenheit",
+        "type": "boolean",
+        "label": "Use Fahrenheit (°F)",
+        "defaultValue": false,
+        "description": "Display temperatures in Fahrenheit (°F) instead of Celsius (°C)."
+      },
+      {
+        "key": "percentPad",
+        "type": "enum",
+        "label": "Percentage padding",
+        "options": [
+          "none",
+          "zero",
+          "lead",
+          "trail"
+        ],
+        "defaultValue": "none",
+        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'."
+      },
+      {
+        "key": "showGauges",
+        "type": "boolean",
+        "label": "Show vertical gauges",
+        "defaultValue": true,
+        "description": "Show vertical battery-style capsule gauges in the bar."
+      },
+      {
+        "key": "showValues",
+        "type": "boolean",
+        "label": "Show figures with gauges",
+        "defaultValue": false,
+        "description": "Put numeric figures beside vertical gauges in compact and full modes."
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Sample interval (seconds)",
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 2
+      },
+{
+        "key": "gpuIcon",
+        "type": "string",
+        "label": "GPU glyph",
+        "defaultValue": "󰾲"
+      },
+      {
+        "key": "fanIcon",
+        "type": "string",
+        "label": "Fan glyph",
+        "defaultValue": "\uDB80\uDE10"
+      },
+      {
+        "key": "cpuIcon",
+        "type": "string",
+        "label": "CPU glyph",
+        "defaultValue": ""
+      },
+      {
+        "key": "tempIcon",
+        "type": "string",
+        "label": "Temperature glyph",
+        "defaultValue": ""
+      },
+      {
+        "key": "gpuTempIcon",
+        "type": "string",
+        "label": "GPU Temperature glyph",
+        "defaultValue": "󰔏"
+      },
+      {
+        "key": "ramIcon",
+        "type": "string",
+        "label": "Memory glyph",
+        "defaultValue": ""
+      },
+      {
+        "key": "iconSize",
+        "type": "integer",
+        "label": "Icon size (px)",
+        "min": 0,
+        "max": 48,
+        "step": 1,
+        "defaultValue": 0,
+        "description": "0 follows the theme's bar icon size."
+      },
+      {
+        "key": "warnPercent",
+        "type": "integer",
+        "label": "Warning load (%)",
+        "min": 1,
+        "max": 100,
+        "step": 1,
+        "defaultValue": 70
+      },
+      {
+        "key": "criticalPercent",
+        "type": "integer",
+        "label": "Critical load (%)",
+        "min": 1,
+        "max": 100,
+        "step": 1,
+        "defaultValue": 90
+      },
+      {
+        "key": "warnTempC",
+        "type": "integer",
+        "label": "Warning temp (°C)",
+        "min": 1,
+        "max": 150,
+        "step": 1,
+        "defaultValue": 75
+      },
+      {
+        "key": "criticalTempC",
+        "type": "integer",
+        "label": "Critical temp (°C)",
+        "min": 1,
+        "max": 150,
+        "step": 1,
+        "defaultValue": 90
+      },
+      {
+        "key": "showFan",
+        "type": "boolean",
+        "label": "Show fan RPM",
+        "defaultValue": true,
+        "description": "Show the fan RPM figure and glyph in the top bar whenever a readable fan exists."
+      },
+      {
+        "key": "gpu",
+        "type": "string",
+        "label": "GPU card preference",
+        "defaultValue": "auto",
+        "description": "'auto' picks the active card; otherwise an index ('0', '1') or name substring."
+      },
+      {
+        "key": "monitors",
+        "type": "string",
+        "label": "Monitors",
+        "defaultValue": "",
+        "description": "Which screens to draw on by connector name (e.g. 'DP-1,HDMI-A-1'). Empty means all screens."
+      },
+      {
+        "key": "clickCommand",
+        "type": "string",
+        "label": "Left click runs",
+        "defaultValue": "",
+        "description": "Custom command to run on left click. Leave empty to open the built-in system telemetry panel."
+      },
+      {
+        "key": "processProbeIntervalSec",
+        "type": "integer",
+        "label": "Process survey interval (seconds)",
+        "min": 3,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 8,
+        "description": "How often the popup re-runs its process survey behind the Top CPU, Top Memory, and Top Idle lists. A short run out of one core while it samples."
+      },
+      {
+        "key": "topProcessCount",
+        "type": "integer",
+        "label": "Rows per process list",
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "defaultValue": 5,
+        "description": "How many rows each of the Top CPU, Top RAM, and Top Idle lists shows in the panel (3-5 recommended)."
+      }
+    ]
+  }
+}

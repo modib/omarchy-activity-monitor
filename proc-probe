@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+# proc-probe — a periodic survey of the highest CPU consumers, the largest
+# memory users, and the idle GUI apps this machine could reclaim.
+#
+# The activity-monitor plugin reads /proc directly for its telemetry, but
+# process accounting is not one file — it is a few hundred directories' worth —
+# so that
+# part hands off to this single short-running script instead. Two snapshots of
+# /proc/<pid>/stat are taken a second apart and the delta is normalized against
+# the whole-machine tick count, which is how top computes a percentage that is
+# comparable across machines.
+#
+# Emits a tab-separated report on stdout. Parsing lives in Model.js.
+#
+#   meta\t<unix-ts>\t<ncpus>\t<active-pid>
+#   cpu\t<pid>\t<comm>\t<cpu%>\t<rssKb>\t<uid>\t<args>
+#   mem\t[...]
+#   idle\t[...]
+#
+# Env knobs (all optional):
+#   HW_TOP_N         how many rows in the cpu / mem lists       (default 15)
+#   HW_IDLE_CPU      max cpu% an app may use and still be idle   (default 1)
+#   HW_IDLE_MEM_MIB  min memory (MiB) before an app is worth it  (default 150)
+#   HW_PROTECT_EXTRA comma-separated comms added to the protect list
+#
+# An app counts as "idle" when ALL of these hold:
+#   - it belongs to the invoking user (userspace only, like the kill actions)
+#   - it has a display connection (DISPLAY or WAYLAND_DISPLAY in environ)
+#   - it used <= HW_IDLE_CPU% of a core over the sample window
+#   - it holds >= HW_IDLE_MEM_MIB MiB resident (ignore tiny helpers)
+#   - it is not currently the focused window
+#   - it is not on the protect list (compositor, shell, pipewire, terminals…)
+#
+# The protect list exists so an optimizer never offers to take down the thing
+# it runs in, or a terminal with active work in it. Everything there is a
+# deliberate, auditable default.
+
+export LC_ALL=C
+set -u
+
+TOP_N=${HW_TOP_N:-15}
+IDLE_CPU=${HW_IDLE_CPU:-1}
+IDLE_MEM_KB=$(( (${HW_IDLE_MEM_MIB:-150}) * 1024 ))
+
+ME=$(id -u)
+
+# ------------------------------------------------------------------- probing
+#
+# One trip through /proc/[0-9]* using only bash builtins — no per-pid forks —
+# reading stat, status, cmdline, and environ with < > redirections.
+
+snapshot() {
+  local d pid line rest ppid utime stime comm st rss uid args
+  for d in /proc/[0-9]*; do
+    pid=${d##*/}
+    IFS= read -r line < "$d/stat" 2>/dev/null || continue
+    [[ $line == *') '* ]] || continue
+    # After the final ") " the fields restart at state: #12 is utime, #13 stime.
+    rest=${line##*) }
+    set -- $rest
+    ppid=$2
+    [[ $ppid == 2 ]] && continue      # children of kthreadd are kernel threads
+    utime=${12}
+    stime=${13}
+
+    comm=${line#*\(}
+    comm=${comm%\)*}
+    comm=${comm//$'\t'/" "}
+
+    { st="$(<"$d/status")"; } 2>/dev/null
+    rss=0
+    uid=-1
+    # The value lines are "VmRSS:\t 6572 kB" style; %% patterns on the raw string
+# misfire on the leading whitespace, so a regex is used for both numbers.
+if [[ $st =~ VmRSS:[[:space:]]*([0-9]+) ]]; then
+      rss=${BASH_REMATCH[1]}
+    fi
+    if [[ $st =~ Uid:[[:space:]]*([0-9]+) ]]; then
+      uid=${BASH_REMATCH[1]}
+    fi
+
+    # Residency in a field matters: an empty uid shifts every column after it
+    # when the reduce stage splits on tabs (read collapses empty fields).
+    [[ $uid =~ ^-?[0-9]+$ ]] || uid=-1
+
+    # cmdline is NUL separated and bash cannot store NUL in a variable, so the
+    # tokens are read one at a time into a space-joined string (builtins only).
+    { args=""
+      if [[ -r "$d/cmdline" ]]; then
+        while IFS= read -r -d '' tok; do
+          args+="$tok "
+          (( ${#args} > 80 )) && break
+        done < "$d/cmdline"
+      fi
+    } 2>/dev/null
+    args=${args//$'\t'/' '}
+    while [[ $args == *'  '* ]]; do args=${args//'  '/' '}; done
+    args=${args#" "}
+    args=${args%" "}
+    args=${args:0:80}
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$pid" "$comm" "$utime" "$stime" "$rss" "$uid" "$args"
+  done
+}
+
+totals() {
+  # "cpu" aggregate jiffies and the count of cores.
+  awk '
+    /^cpu /       { for (i = 2; i <= NF; i++) total += $i }
+    /^cpu[0-9]+/  { cores++ }
+    END           { print total, cores }
+  ' /proc/stat
+}
+
+# ------------------------------------------------------------- the two ticks
+
+t1=$(totals)
+s1=$(snapshot)
+sleep 1
+t2=$(totals)
+s2=$(snapshot)
+
+read -r TICKS1 _ <<< "$t1"
+read -r TICKS2 NCPUS <<< "$t2"
+TICKS_TOTAL=$(( (TICKS2 > TICKS1 ? TICKS2 : TICKS1) - TICKS1 ))
+(( TICKS_TOTAL > 0 )) || TICKS_TOTAL=1
+
+# The focused window, so the optimizer never proposes the app in view.
+ACTIVE_PID=0
+if command -v hyprctl >/dev/null 2>&1 \
+  && command -v jq >/dev/null 2>&1; then
+  ACTIVE_PID=$(hyprctl activewindow -j 2>/dev/null | jq -r '.pid' 2>/dev/null)
+  [[ $ACTIVE_PID =~ ^[0-9]+$ ]] || ACTIVE_PID=0
+fi
+
+# ------------------------------------------------------------------- protect
+
+protect() {
+  printf '%s\n' \
+    Hyprland hyprland quickshell omarchy-shell qs omarchy-shell.bin shell \
+    systemd systemd-udevd systemd-journal systemd-logind systemd-networkd \
+    systemd-resolved systemd-user systemd-timedated systemd-coredump \
+    pipewire pipewire-pulse wireplumber dbus-daemon dbus-broker \
+    polkitd polkit-gnome Xwayland xdg-desktop-portal xdg-desktop-portal-gtk \
+    xdg-desktop-portal-hyprland xdg-document-portal xdg-permission-portal \
+    foot kitty alacritty ghostty wezterm konsole gnome-terminal \
+    NetworkManager wpa_supplicant bluetoothd udisksd sshd gamescope \
+    $1
+}
+
+IFS=, read -ra EXTRA <<< "${HW_PROTECT_EXTRA:-}"
+mapfile -t PROTECTED < <(protect "${EXTRA[*]}")
+
+in_protected() {
+  local name=$1 p
+  for p in "${PROTECTED[@]}"; do
+    [[ $name == "$p" ]] && return 0
+  done
+  return 1
+}
+
+# ------------------------------------------------------------------- reduce
+
+declare -A U2 S2 R2
+declare -a PIDS2
+while IFS=$'\t' read -ra f; do
+  [[ ${f[0]} =~ ^[0-9]+$ ]] || continue
+  [[ ${f[2]} =~ ^[0-9]+$ && ${f[3]} =~ ^[0-9]+$ ]] || continue
+  pid=${f[0]}
+  U2[$pid]=${f[2]}
+  S2[$pid]=${f[3]}
+  R2[$pid]=${f[4]:-0}
+  PIDS2+=("$pid")
+done <<< "$s2"
+
+# cpu% per pid plus the first snapshot's row data for lookups
+declare -A CPU COMM1 RSS1 UID1 ARGS1
+declare -a PIDS
+while IFS=$'\t' read -ra f; do
+  pid=${f[0]}
+  [[ $pid =~ ^[0-9]+$ ]] || continue
+  [[ ${f[2]} =~ ^[0-9]+$ && ${f[3]} =~ ^[0-9]+$ ]] || continue
+  [[ -n ${U2[$pid]+x} ]] || continue
+
+  delta=$(( U2[$pid] + S2[$pid] - f[2] - f[3] ))
+  (( delta >= 0 )) || delta=0
+  CPU[$pid]=$(( delta * NCPUS * 100 / TICKS_TOTAL ))
+
+  COMM1[$pid]=${f[1]}
+  RSS1[$pid]=${f[4]:-0}
+  UID1[$pid]=${f[5]:--1}
+  ARGS1[$pid]=${f[*]:6}
+  PIDS+=("$pid")
+done <<< "$s1"
+
+row() {
+  local tag=$1 pid=$2
+  if [[ ! -v COMM1[$pid] ]]; then printf 'row: no COMM1 for pid %s\n' "$pid" >&2; fi
+  printf '%s\t%s\t%s\t%.1f\t%s\t%s\t%s\n' \
+    "$tag" "$pid" "${COMM1[$pid]:-?}" "${CPU[$pid]:--1}" \
+    "${RSS1[$pid]:-0}" "${UID1[$pid]:--1}" "${ARGS1[$pid]:-}"
+}
+
+# Pids that currently own a window on the compositor. `ss -xap` cannot reveal
+# wayland clients here (Hyprland owns both ends of each connection), and
+# /proc/<pid>/environ never carries DISPLAY/WAYLAND_DISPLAY under uwsm, so the
+# compositor's own window table is the one reliable "this is a GUI app" signal.
+has_display() {
+  case " $WINDOW_PIDS " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
+WINDOW_PIDS="$(hyprctl clients -j 2>/dev/null | jq -r '.[].pid | tostring' 2>/dev/null | tr '\n' ' ')"
+[[ -n ${HW_DEBUG:+x} ]] && printf 'dbg\twindows=[%s]\n' "$WINDOW_PIDS" >&2
+
+printf 'meta\t%s\t%s\t%s\n' "$(date +%s)" "$NCPUS" "$ACTIVE_PID"
+
+# top cpu — any user, a root process can genuinely hog a core
+{
+  for pid in "${PIDS[@]}"; do
+    printf '%s\t%s\n' "${CPU[$pid]}" "$pid"
+  done
+} | sort -nr -t $'\t' -k1,1 | head -n "$TOP_N" | while IFS=$'\t' read -r _ pid; do
+  row cpu "$pid"
+done
+
+# top memory
+{
+  for pid in "${PIDS[@]}"; do
+    printf '%s\t%s\n' "${RSS1[$pid]}" "$pid"
+  done
+} | sort -nr -t $'\t' -k1,1 | head -n "$TOP_N" | while IFS=$'\t' read -r _ pid; do
+  row mem "$pid"
+done
+
+# idle GUI apps the user could reclaim
+{
+  for pid in "${PIDS[@]}"; do
+    [[ ${UID1[$pid]} =~ ^[0-9]+$ ]] || continue
+    [[ ${RSS1[$pid]} =~ ^[0-9]+$ ]] || continue
+    [[ ${UID1[$pid]} -eq $ME ]] || continue
+    [[ ${RSS1[$pid]} -ge $IDLE_MEM_KB ]] || continue
+    (( CPU[$pid] <= IDLE_CPU )) || continue
+    [[ $pid == "$ACTIVE_PID" ]] && continue
+    in_protected "${COMM1[$pid]}" && continue
+    has_display "$pid" || continue
+    printf '%s\t%s\n' "${RSS1[$pid]}" "$pid"
+  done
+} | sort -nr -t $'\t' -k1,1 | while IFS=$'\t' read -r _ pid; do
+  row idle "$pid"
+done
