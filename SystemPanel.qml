@@ -239,6 +239,7 @@ Text {
               spacing: Style.space(2)
 
               Text {
+                id: headerTitle
                 textFormat: Text.PlainText
                 text: "Activity Monitor"
                 color: root.baseColor
@@ -266,22 +267,21 @@ Text {
             }
           }
 
-          // Gear Icon for In-Panel Settings — a bare glyph in the header's
-          // top-right corner, no box around it.
+          // Gear Icon for In-Panel Settings — a bare glyph pinned to the header's
+          // top-right corner, aligned with the "Activity Monitor" title line,
+          // and a persistent foreground white like the rest of the panel text.
           Item {
             id: settingsButton
             implicitWidth: settingsGlyph.implicitWidth
             implicitHeight: settingsGlyph.implicitHeight
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenter: headerTitle.verticalCenter
 
             Text {
               id: settingsGlyph
               anchors.centerIn: parent
               text: "\uF013"
-              color: root.settingsOpen
-                ? root.hotColor
-                : (settingsHover.containsMouse ? root.baseColor : Color.accent)
+              color: root.baseColor
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
             }
