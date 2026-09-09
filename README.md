@@ -17,20 +17,20 @@ current heaviest processes, and the idle apps you can reclaim.
 - **Persistent thermals** — CPU temperature and fan RPM stay in the bar whenever
   a reading exists, so nothing important is hidden behind a click.
 - **Live history graphs** — a 2x2 grid of rolling 60-second windows: CPU and
-  memory load on the first line, temperature and fan speed on the second. The
-  CPU card stacks **user / system / iowait**, the memory card stacks
-  **apps / cache / buffers**, each with a colour legend, so you can see at a
-  glance whether load is your code, the kernel, or the disk. Buffered
+  memory load on the first line, temperature and fan speed on the second, all
+  drawn as the same square-pixel columns. CPU tints each column by
+  **user / system / iowait** and memory by **apps / cache / buffers**, so the
+  breakdown is visible without a legend cluttering the cards. Buffered
   continuously in the background, so the panel opens already populated.
 - **Process lists** — Heaviest CPU (anything above 10% of a core), Heaviest
   Memory (above 200 MiB resident), and Idle Apps (the reclaimable GUI apps), one
   row each with the highlighted metric, the app name, and the full command line.
   The lists always fill to their row cap with the top processes, so there is
   always at least one row with a kill affordance no matter how quiet the box.
-- **Your processes, not the OS's** — every user-owned row offers consent-confirmed
-  **Quit** (SIGTERM) and **Force** (SIGKILL); system processes carry a
-  "system" tag instead of a kill affordance, and the panel re-surveys after an
-  action.
+- **Quiet, on your own processes** — rows belonging to the OS keep a faint
+  tinted background and never carry actions; your own rows stay plain until you
+  hover, when a subtle **Quit** (SIGTERM) / **Force** (SIGKILL) pair appears
+  with a consent prompt. The panel re-surveys after an action.
 - **In-panel settings** — a drawer that lives in the panel: mode, which items
   the bar shows, memory format, temperature unit and format. No config file
   surfing.
@@ -66,14 +66,15 @@ The panel is keyboard-driven and anchored to the widget:
 - **Header** — the resolved CPU model and the RAM/Swap totals, with a gear that
   opens the in-panel settings drawer (`s` also toggles it).
 - **History graphs** — CPU + Memory side by side on the first line,
-  Temperature + Fan speed on the second, the last 60 seconds. CPU stacks
-  user/system/iowait, Memory stacks apps/cache/buffers — both with a colour
-  legend — while thermals stay single-line square-pixel columns.
+  Temperature + Fan speed on the second, the last 60 seconds, all in matching
+  square-pixel columns. CPU stacks user/system/iowait and Memory
+  apps/cache/buffers by tint, so the breakdown reads at a glance without a
+  legend row.
 - **Graphics metrics** — card name, load, temperature, VRAM meter, power,
   fan, and core clock (only when a card is present).
 - **Heaviest CPU / Heaviest Memory / Idle Apps** — capped lists of the moment's
-  heaviest consumers. User-owned rows carry **Quit** / **Force**; system rows
-  are tagged and read-only.
+  heaviest consumers. OS rows are tinted read-only; hovering your own rows
+  reveals **Quit** / **Force**.
 - **Keyboard** — `Escape` closes, `Tab`/`Shift+Tab` switch panels, `r` resamples,
   `c`/`f` toggle °C/°F.
 
@@ -156,8 +157,8 @@ offer to take down — the compositor and shell themselves, the audio and
 notification stacks, `systemd` units, portals, dbus, terminals, and network
 helpers. Kernel threads (children of `kthreadd`) never appear at all. The quit
 and force actions are plain `SIGTERM`/`SIGKILL` on the pid, launched from the
-shell, and are only reachable after an in-panel confirmation that expires on
-its own.
+shell, shown only for your own processes and only while you hover the row, and
+are only reachable after an in-panel confirmation that expires on its own.
 
 ## Settings
 

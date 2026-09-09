@@ -775,13 +775,16 @@ Text {
     property string label: ""
     property bool selected: false
     property color activeColor: Color.accent
+    // When false the chip ignores its own hover so a surrounding row's hover
+    // state stays authoritative (stops the show-on-hover toggling).
+    property bool hoverable: true
     signal picked()
 
     implicitWidth: chipLabel.implicitWidth + Style.space(12)
     implicitHeight: chipLabel.implicitHeight + Style.space(8)
     radius: Style.cornerRadius
-    color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.20) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12))
-    border.color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.80) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.55))
+    color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.18) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10))
+    border.color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.65) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.45))
     border.width: 1
 
     Behavior on color { ColorAnimation { duration: 140 } }
@@ -803,7 +806,7 @@ Text {
     MouseArea {
       id: chipMouse
       anchors.fill: parent
-      hoverEnabled: true
+      hoverEnabled: chip.hoverable
       cursorShape: Qt.PointingHandCursor
       onClicked: chip.picked()
     }
@@ -933,9 +936,6 @@ Text {
 
     readonly property bool stacked: graph.seriesValues !== null && graph.seriesValues !== undefined
       && graph.seriesSpec !== null && graph.seriesSpec !== undefined && graph.seriesSpec.length > 0
-    readonly property int sampleCount: graph.stacked
-      ? (graph.seriesValues ? graph.seriesValues.length : 0)
-      : (graph.values ? graph.values.length : 0)
 
     width: graph.userWidth >= 0 ? graph.userWidth : parent.width
     implicitHeight: graphCol.implicitHeight + Style.space(24)
@@ -989,26 +989,6 @@ Text {
           : (graph.values ? graph.values.length : 0)
         readonly property real colWidth: width / Math.max(1, cols)
 
-        // Stacked helpers: `stackPct` clamps one series to 0..100% of machine
-        // capacity, `stackBasePx` sums the pixel height of every series below
-        // `upTo` in the *column* named by `colIndex`.
-        function stackPct(colIndex, key) {
-          var samples = graph.seriesValues
-          if (!samples || colIndex < 0 || colIndex >= samples.length) return 0
-          var entry = samples[colIndex]
-          if (!entry) return 0
-          var v = Number(entry[key])
-          return isFinite(v) ? Math.max(0, Math.min(100, v)) : 0
-        }
-        function stackBasePx(colIndex, upTo) {
-          var hgt = 0
-          var specs = graph.seriesSpec
-          for (var i = 0; i < upTo && i < specs.length; i++) {
-            hgt += Math.round(graphArea.height * graphArea.stackPct(colIndex, specs[i].key) / 100)
-          }
-          return hgt
-        }
-
         // Bottom-up ramp shared by every column: the base of a column is the
         // urgent red, fading up through orange into a translucent accent tint,
         // so a taller column reads hotter than a short one.
@@ -1037,10 +1017,10 @@ Text {
           font.pixelSize: Style.font.caption
         }
 
-        // Two renderers share this area. Stacked mode draws each series as a
-        // full-width horizontal segment per column (used by the CPU and memory
-        // graphs); scalar mode keeps the square-pixel columns (temperature,
-        // fan speed). No shaders, no per-column animation — a few flat rects.
+        // Square-pixel columns for every card. Scalar graphs (temperature, fan)
+        // ramp a column from hot red to accent; stacked graphs (CPU, memory)
+        // colour each pixel by the series it belongs to — user/system/iowait or
+        // apps/cache/buffers — so they share the exact look of the thermals.
         Repeater {
           width: graphArea.width
           height: graphArea.height
@@ -1054,67 +1034,46 @@ Text {
             }
             readonly property int blocks: Math.round(graphArea.maxBlocks * col.sample / 100)
 
+            // Stacked mode: a bottom-up list of pixel colours, one per square,
+            // drawn in series order (series 0 at the baseline).
+            readonly property var blockTints: (function () {
+              if (!graph.stacked) return []
+              var specs = graph.seriesSpec
+              var entry = graph.seriesValues[colIndex]
+              if (!entry) return []
+              var tints = []
+              for (var i = 0; i < specs.length; i++) {
+                var p = Number(entry[specs[i].key])
+                if (!isFinite(p)) p = 0
+                var n = Math.min(
+                  Math.round(graphArea.maxBlocks * Math.max(0, Math.min(100, p)) / 100),
+                  Math.max(0, graphArea.maxBlocks - tints.length))
+                var c = specs[i].color
+                for (var b = 0; b < n; b++) tints.push(c)
+              }
+              return tints
+            })()
+
+            readonly property int totalBlocks: graph.stacked
+              ? col.blockTints.length
+              : Math.max(0, col.blocks)
+
             width: graphArea.colWidth
             height: graphArea.height
             x: index * graphArea.colWidth
             clip: true
 
             Repeater {
-              visible: !graph.stacked
-              model: Math.max(0, col.blocks)
+              model: col.totalBlocks
               delegate: Rectangle {
                 width: graphArea.block
                 height: graphArea.block
                 x: Math.max(0, Math.floor((col.width - graphArea.block) / 2))
                 y: graphArea.height - (index + 1) * graphArea.stride
-                color: graphArea.rampColor((index + 0.5) / Math.max(1, col.blocks))
+                color: graph.stacked
+                  ? col.blockTints[index]
+                  : graphArea.rampColor((index + 0.5) / Math.max(1, col.totalBlocks))
               }
-            }
-
-            Repeater {
-              visible: graph.stacked
-              model: graph.stacked ? graph.seriesSpec.length : 0
-              delegate: Rectangle {
-                readonly property int sIndex: index
-                readonly property real sPct: graphArea.stackPct(col.colIndex, graph.seriesSpec[sIndex].key)
-                readonly property real cBase: graphArea.stackBasePx(col.colIndex, sIndex)
-                readonly property color sc: graph.seriesSpec[sIndex].color
-
-                width: col.width
-                x: 0
-                height: Math.max(0, Math.round(graphArea.height * sPct / 100) - (sIndex > 0 ? 1 : 0))
-                y: graphArea.height - cBase - height
-                visible: height >= 1
-                color: Qt.rgba(sc.r, sc.g, sc.b, 0.9)
-              }
-            }
-          }
-        }
-      }
-
-      // Compact legend for stacked graphs only; scalar graphs stay clean.
-      Row {
-        width: parent.width
-        visible: graph.stacked
-        spacing: Style.space(10)
-        Repeater {
-          model: graph.stacked ? graph.seriesSpec : 0
-          delegate: Row {
-            spacing: Style.space(4)
-            Rectangle {
-              width: Style.space(7)
-              height: Style.space(7)
-              radius: 2
-              anchors.verticalCenter: parent.verticalCenter
-              color: modelData.color
-            }
-            Text {
-              textFormat: Text.PlainText
-              text: modelData.label || modelData.key
-              color: root.dimColor
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              anchors.verticalCenter: parent.verticalCenter
             }
           }
         }
@@ -1148,7 +1107,12 @@ Text {
     implicitWidth: parent.width
     height: prowRow.implicitHeight + Style.space(8)
     radius: Style.cornerRadius
-    color: prowMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.06) : "transparent"
+    // The row background is the system/user marker: user-owned rows stay
+    // neutral (brightening on hover), OS rows keep a constant faint tint and
+    // never gain kill chips, so no extra "system" tag is needed.
+    color: prowMouse.containsMouse
+      ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.06)
+      : (prow.isUser ? "transparent" : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04))
     Behavior on color { ColorAnimation { duration: 120 } }
 
     MouseArea {
@@ -1219,40 +1183,23 @@ Text {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(4)
-          visible: prow.isUser && !prow.pending
+          // Only user-owned rows get kills, and only while the pointer rests
+          // on the row — quiet rows stay clean and the panel only flashes
+          // controls where you are actually looking.
+          visible: prow.isUser && !prow.pending && prowMouse.containsMouse
 
           ModeChip {
             label: "Quit"
             selected: false
+            hoverable: false
             onPicked: prow.quitRequested()
           }
           ModeChip {
             label: "Force"
             selected: false
             activeColor: prow.hotColor
+            hoverable: false
             onPicked: prow.forceRequested()
-          }
-        }
-
-        Rectangle {
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          implicitWidth: sysTag.implicitWidth + Style.space(10)
-          implicitHeight: sysTag.implicitHeight + Style.space(6)
-          radius: Style.cornerRadius
-          visible: !prow.isUser
-          color: "transparent"
-          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.35)
-          border.width: 1
-
-          Text {
-            id: sysTag
-            textFormat: Text.PlainText
-            anchors.centerIn: parent
-            text: "system"
-            color: root.baseColor
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
           }
         }
 
