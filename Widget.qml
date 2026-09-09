@@ -112,6 +112,8 @@ Panel {
   // The popup's process lists: how many rows per list and how often Service
   // re-runs the process survey script.
   readonly property int topProcessCount: intSetting("topProcessCount", 5, 1, 20)
+  readonly property int cpuThresholdPct: intSetting("cpuThresholdPct", 10, 1, 400)
+  readonly property int memThresholdMib: intSetting("memThresholdMib", 200, 32, 8192)
 
   readonly property string clickCommand: String(setting("clickCommand", ""))
 
@@ -585,6 +587,8 @@ Panel {
     warnTempC: root.warnTempC
     criticalTempC: root.criticalTempC
     topProcessCount: root.topProcessCount
+    cpuThresholdPct: root.cpuThresholdPct
+    memThresholdMib: root.memThresholdMib
   }
 
   // A component group: glyph + figure (+ temp)

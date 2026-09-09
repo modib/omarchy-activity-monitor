@@ -22,11 +22,12 @@ current heaviest processes, and the idle apps you can reclaim.
   **user / system / iowait** and memory by **apps / cache / buffers**, so the
   breakdown is visible without a legend cluttering the cards. Buffered
   continuously in the background, so the panel opens already populated.
-- **Process lists** — Heaviest CPU (anything above 10% of a core), Heaviest
-  Memory (above 200 MiB resident), and Idle Apps (the reclaimable GUI apps), one
-  row each with the highlighted metric, the app name, and the full command line.
-  The lists always fill to their row cap with the top processes, so there is
-  always at least one row with a kill affordance no matter how quiet the box.
+- **Process lists** — Heaviest CPU (anything above the CPU threshold), Heaviest
+  Memory (anything above the memory threshold), and Idle Apps (the reclaimable
+  GUI apps), one row each with the highlighted metric, the app name, and the
+  full command line. Thresholds keep the lists short: a quiet machine shows few
+  or no rows instead of padding. `topProcessCount`, `cpuThresholdPct`, and
+  `memThresholdMib` tune the length.
 - **Quiet, on your own processes** — rows belonging to the OS keep a faint
   tinted background and never carry actions; your own rows stay plain until you
   hover, when a subtle **Quit** (SIGTERM) / **Force** (SIGKILL) pair appears
@@ -202,7 +203,9 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `clickCommand` | string | `""` | Command for left click; empty opens the panel. |
 | `monitors` | array/string | `[]` | Connector names to draw on; empty draws on all. |
 | `processProbeIntervalSec` | int | `8` | Seconds between process surveys. |
-| `topProcessCount` | int | `5` | Rows per list in the panel (capped at 5). |
+| `topProcessCount` | int | `5` | Max rows per list in the panel (capped at 5). |
+| `cpuThresholdPct` | int | `10` | CPU% floor for the Heaviest CPU list. |
+| `memThresholdMib` | int | `200` | Resident-size floor (MiB) for Heaviest Memory. |
 
 ## IPC
 

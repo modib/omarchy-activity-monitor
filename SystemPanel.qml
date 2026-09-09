@@ -34,21 +34,21 @@ KeyboardPanel {
   // Idle Apps) each capped at a handful of rows; pending* is the one-shot
   // confirm state for a kill offered on any row.
   property int topProcessCount: 15
+  property int cpuThresholdPct: 10
+  property int memThresholdMib: 200
   property int pendingPid: 0
   property string pendingSig: ""
   property string pendingComm: ""
 
   readonly property int sectionRows: Math.min(Math.max(root.topProcessCount, 1), 5)
+  readonly property int memThresholdKib: root.memThresholdMib * 1024
 
-  // Heaviest CPU only counts processes pulling more than 10% of a core;
-  // Heaviest Memory only counts processes above 200 MiB resident. Both lists
-  // still cap rows so the panel stays short.
-  //
-  // `topup` guarantees the section never renders empty: when fewer processes
-  // pass the filter, the remaining slots are filled with the top rows anyway.
-  // That keeps at least one Quit / Force affordance on screen no matter how
-  // idle the machine is.
-  function sliceProcessList(report, key, filter, topup) {
+  // Heaviest CPU only counts processes pulling more than cpuThresholdPct% of a
+  // core; Heaviest Memory only counts processes above memThresholdMib MiB
+  // resident, and both lists cap at sectionRows. The thresholds keep a quiet
+  // machine's lists genuinely short — a row only appears when its process is
+  // actually worth your attention.
+  function sliceProcessList(report, key, filter) {
     var arr = report && report.ok ? report[key] : []
     if (arr === undefined || arr === null) arr = []
     var out = []
@@ -56,23 +56,15 @@ KeyboardPanel {
       if (filter && !filter(arr[i])) continue
       out.push(arr[i])
     }
-    if (topup && arr.length > out.length) {
-      var seen = {}
-      for (var j = 0; j < out.length; j++) seen[out[j].pid] = 1
-      for (var k = 0; k < arr.length && out.length < root.sectionRows; k++) {
-        if (seen[arr[k].pid]) continue
-        out.push(arr[k])
-      }
-    }
     return out
   }
 
   readonly property var processCpuList: sliceProcessList(hw.processReport, "cpu", function(e) {
-    return e && isFinite(e.cpuPct) && e.cpuPct > 10
-  }, true)
+    return e && isFinite(e.cpuPct) && e.cpuPct > root.cpuThresholdPct
+  })
   readonly property var processMemList: sliceProcessList(hw.processReport, "mem", function(e) {
-    return e && isFinite(e.rssKib) && e.rssKib > 204800
-  }, true)
+    return e && isFinite(e.rssKib) && e.rssKib > root.memThresholdKib
+  })
   readonly property var processIdleList: sliceProcessList(hw.processReport, "idle")
 
   // Owner uid reported by proc-probe's meta line. Only a process owned by this
