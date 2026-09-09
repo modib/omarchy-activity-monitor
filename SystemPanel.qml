@@ -266,14 +266,33 @@ Text {
             }
           }
 
-          // Gear Icon for In-Panel Settings
-          ModeChip {
+          // Gear Icon for In-Panel Settings — a bare glyph in the header's
+          // top-right corner, no box around it.
+          Item {
             id: settingsButton
-            label: "\uF013"
-            selected: root.settingsOpen
+            implicitWidth: settingsGlyph.implicitWidth
+            implicitHeight: settingsGlyph.implicitHeight
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            onPicked: root.settingsOpen = !root.settingsOpen
+
+            Text {
+              id: settingsGlyph
+              anchors.centerIn: parent
+              text: "\uF013"
+              color: root.settingsOpen
+                ? root.hotColor
+                : (settingsHover.containsMouse ? root.baseColor : Color.accent)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+
+            MouseArea {
+              id: settingsHover
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.settingsOpen = !root.settingsOpen
+            }
           }
         }
 
@@ -765,7 +784,7 @@ Text {
     id: chip
     property string label: ""
     property bool selected: false
-    property color activeColor: Color.accent
+    property color activeColor: root.hotColor
     // When false the chip ignores its own hover so a surrounding row's hover
     // state stays authoritative (stops the show-on-hover toggling).
     property bool hoverable: true
