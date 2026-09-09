@@ -732,7 +732,7 @@ Text {
           glyph: "\uF4BC"
           listModel: root.processCpuList
           scope: "cpu"
-          emptyText: "No running processes."
+          emptyText: "No process is over " + root.cpuThresholdPct + "% core right now."
         }
 
         ProcessSection {
@@ -740,7 +740,7 @@ Text {
           glyph: "\uEFC5"
           listModel: root.processMemList
           scope: "mem"
-          emptyText: "No resident processes."
+          emptyText: "No process is over " + root.memThresholdMib + " MiB resident right now."
         }
 
         ProcessSection {
