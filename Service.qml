@@ -43,6 +43,8 @@ Item {
 
   readonly property var fanInfo: probe.fan
   readonly property bool hasFan: fanInfo !== null && fanInfo !== undefined
+  readonly property bool hasTempSensor: cpuTempFile.path !== ""
+  readonly property bool hasFanSensor: fanFile.path !== ""
     && fanInfo.path !== undefined && fanInfo.path !== null && fanInfo.path !== ""
 
   // -------------------------------------------------------------- readings
@@ -69,6 +71,8 @@ Item {
   // reading in between, so buffering costs nothing but an array push.
   property var cpuHistory: []
   property var memHistory: []
+  property var tempHistory: []
+  property var fanHistory: []
   readonly property int historyCap: 60
   readonly property int historySeconds: historyCap
 
@@ -140,6 +144,26 @@ Item {
     root.memHistory = m
   }
 
+  // Like the load history, but for the sensor pair: temperature normalized onto
+  // the 20-90 °C scale and fan speed onto a 0-6000 rpm scale, so both draw in
+  // the same 0-100 slot as the load graphs.
+  function pushSensorHistory(tempC, fanRpm) {
+    var cap = root.historyCap
+    var t = root.tempHistory.slice()
+    if (isFinite(tempC) && tempC >= 0) {
+      t.push(Model.clamp((tempC - 20) / 70 * 100, 0, 100))
+      if (t.length > cap) t.shift()
+    }
+    root.tempHistory = t
+
+    var f = root.fanHistory.slice()
+    if (isFinite(fanRpm) && fanRpm > 0) {
+      f.push(Model.clamp(fanRpm / 6000 * 100, 0, 100))
+      if (f.length > cap) f.shift()
+    }
+    root.fanHistory = f
+  }
+
   function sample() {
     statFile.reload()
     var jiffies = Model.parseCpuJiffies(statFile.text())
@@ -171,6 +195,8 @@ Item {
       fanFile.reload()
       fanRpm = readNumber(fanFile, 0)
     }
+
+    root.pushSensorHistory(cpuTempC, fanRpm)
 
     if (gpuIsNvidia) {
       sampleNvidia()

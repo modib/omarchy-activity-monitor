@@ -69,9 +69,14 @@ KeyboardPanel {
   })
   readonly property var processIdleList: sliceProcessList(hw.processReport, "idle")
 
+  // Owner uid reported by proc-probe's meta line. Only a process owned by this
+  // uid may ever be offered a Quit / Force action.
+  readonly property int ownUid: hw.processReport && hw.processReport.uid !== undefined ? hw.processReport.uid : -1
+
   readonly property int idleCount: hw.processReport && hw.processReport.ok ? hw.processReport.idle.length : -1
 
   function requestAction(entry, signal) {
+    if (!entry || entry.uid !== root.ownUid) return
     root.pendingPid = entry.pid
     root.pendingSig = signal
     root.pendingComm = entry.comm
@@ -530,21 +535,51 @@ Text {
           }
         }
 
-        // CPU load history graph, above the Heaviest CPU list
-        HistoryGraph {
-          title: "CPU Load History (" + root.historyWindowLabel + ")"
-          values: hw.cpuHistory
-          currentText: hw.cpuPercent >= 0 ? (Math.round(hw.cpuPercent) + "% current") : "–"
-          currentColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
+        // Two-column history block: CPU + Memory side by side on the first
+        // line, Temperature + Fan speed on the second, so the whole trend view
+        // reads as one compact 2x2 grid ahead of the process lists.
+        Row {
+          width: parent.width
+          spacing: Style.space(12)
+
+          HistoryGraph {
+            title: "CPU Load History (" + root.historyWindowLabel + ")"
+            userWidth: (parent.width - parent.spacing) / 2
+            values: hw.cpuHistory
+            currentText: hw.cpuPercent >= 0 ? (Math.round(hw.cpuPercent) + "% current") : "–"
+            currentColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
+          }
+
+          HistoryGraph {
+            title: "Memory Usage History (" + root.historyWindowLabel + ")"
+            userWidth: (parent.width - parent.spacing) / 2
+            values: hw.memHistory
+            currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "% used") : "–"
+            currentColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
+          }
         }
 
-        // Memory Usage History right after the CPU trend, so the two graphs sit
-        // together as one history block.
-        HistoryGraph {
-          title: "Memory Usage History (" + root.historyWindowLabel + ")"
-          values: hw.memHistory
-          currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "% used") : "–"
-          currentColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
+        Row {
+          width: parent.width
+          spacing: Style.space(12)
+
+          HistoryGraph {
+            title: "Temperature History (" + root.historyWindowLabel + ")"
+            userWidth: (parent.width - parent.spacing) / 2
+            values: hw.tempHistory
+            placeholder: hw.hasTempSensor ? "collecting samples…" : "no temperature sensor"
+            currentText: hw.cpuTempC > 0 ? Model.formatTemp(hw.cpuTempC, root.fahrenheit) : "–"
+            currentColor: root.tempColor(hw.cpuTempC)
+          }
+
+          HistoryGraph {
+            title: "Fan Speed History (" + root.historyWindowLabel + ")"
+            userWidth: (parent.width - parent.spacing) / 2
+            values: hw.fanHistory
+            placeholder: hw.hasFanSensor ? "collecting samples…" : "no fan sensor"
+            currentText: hw.fanRpm > 0 ? Model.formatRpm(hw.fanRpm) : "–"
+            currentColor: root.warm(root.baseColor, hw.hasFan ? 0.5 : 0)
+          }
         }
 
         // Graphics Telemetry Section (if GPU present)
@@ -727,8 +762,8 @@ Text {
     implicitWidth: chipLabel.implicitWidth + Style.space(12)
     implicitHeight: chipLabel.implicitHeight + Style.space(8)
     radius: Style.cornerRadius
-    color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.08) : "transparent")
-    border.color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.30) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.18))
+    color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.20) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12))
+    border.color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.80) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.55))
     border.width: 1
 
     Behavior on color { ColorAnimation { duration: 140 } }
@@ -843,6 +878,7 @@ Text {
           pending: root.pendingPid === entry.pid
           pendingSignal: root.pendingSig
           pendingComm: root.pendingComm
+          isUser: entry && entry.uid === root.ownUid
           baseColor: root.baseColor
           hotColor: root.hotColor
           fontFamily: root.fontFamily
@@ -865,8 +901,11 @@ Text {
     property var values: []
     property string currentText: ""
     property color currentColor: Color.accent
+    // Explicit width given by a grid cell; -1 keeps the old full-width look.
+    property real userWidth: -1
+    property string placeholder: "collecting samples…"
 
-    width: parent.width
+    width: graph.userWidth >= 0 ? graph.userWidth : parent.width
     implicitHeight: graphCol.implicitHeight + Style.space(24)
     color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
     border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
@@ -936,7 +975,7 @@ Text {
           textFormat: Text.PlainText
           anchors.centerIn: parent
           visible: graph.values.length < 2
-          text: "collecting samples…"
+          text: graph.placeholder
           color: root.dimColor
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
@@ -983,6 +1022,7 @@ Text {
     id: prow
     property var entry: null
     property string scope: "idle"
+    property bool isUser: true
     property bool pending: false
     property string pendingSignal: ""
     property string pendingComm: ""
@@ -1054,9 +1094,9 @@ Text {
         anchors.verticalCenter: parent.verticalCenter
       }
 
-      // Action column: every row offers consent-gated Quit / Force, so a
-      // runaway can be reined in from Heaviest CPU, Heaviest Memory, or the
-      // Idle Apps reclaim set.
+      // Action column: Quit / Force only exist for processes owned by the
+      // desktop user — everything else is the OS's, not yours, and gets a
+      // "system" tag instead of a kill affordance.
       Item {
         width: Style.space(88)
 
@@ -1064,7 +1104,7 @@ Text {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(4)
-          visible: !prow.pending
+          visible: prow.isUser && !prow.pending
 
           ModeChip {
             label: "Quit"
@@ -1076,6 +1116,28 @@ Text {
             selected: false
             activeColor: prow.hotColor
             onPicked: prow.forceRequested()
+          }
+        }
+
+        Rectangle {
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          implicitWidth: sysTag.implicitWidth + Style.space(10)
+          implicitHeight: sysTag.implicitHeight + Style.space(6)
+          radius: Style.cornerRadius
+          visible: !prow.isUser
+          color: "transparent"
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.35)
+          border.width: 1
+
+          Text {
+            id: sysTag
+            textFormat: Text.PlainText
+            anchors.centerIn: parent
+            text: "system"
+            color: root.baseColor
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
           }
         }
 

@@ -12,7 +12,7 @@
 #
 # Emits a tab-separated report on stdout. Parsing lives in Model.js.
 #
-#   meta\t<unix-ts>\t<ncpus>\t<active-pid>
+#   meta\t<unix-ts>\t<ncpus>\t<active-pid>\t<owner-uid>
 #   cpu\t<pid>\t<comm>\t<cpu%>\t<rssKb>\t<uid>\t<args>
 #   mem\t[...]
 #   idle\t[...]
@@ -216,7 +216,7 @@ has_display() {
 WINDOW_PIDS="$(hyprctl clients -j 2>/dev/null | jq -r '.[].pid | tostring' 2>/dev/null | tr '\n' ' ')"
 [[ -n ${HW_DEBUG:+x} ]] && printf 'dbg\twindows=[%s]\n' "$WINDOW_PIDS" >&2
 
-printf 'meta\t%s\t%s\t%s\n' "$(date +%s)" "$NCPUS" "$ACTIVE_PID"
+printf 'meta\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$NCPUS" "$ACTIVE_PID" "$ME"
 
 # top cpu — any user, a root process can genuinely hog a core
 {

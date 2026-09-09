@@ -223,7 +223,7 @@ function formatRpm(rpm) {
 // that to proc-probe — a short bash script that takes two /proc snapshots one
 // second apart and emits a tab-separated report:
 //
-//   meta\t<unix-ts>\t<ncpus>\t<active-pid>
+//   meta\t<unix-ts>\t<ncpus>\t<active-pid>\t<owner-uid>
 //   cpu\t<pid>\t<comm>\t<cpu%>\t<rssKib>\t<uid>\t<args>
 //   mem\t[...]
 //   idle\t[...]
@@ -237,6 +237,7 @@ function parseProcessReport(raw) {
     at: 0,
     nproc: 0,
     activePid: 0,
+    uid: -1,
     cpu: [],
     mem: [],
     idle: []
@@ -256,6 +257,7 @@ function parseProcessReport(raw) {
       out.at = toNumber(cells[1])
       out.nproc = toNumber(cells[2])
       out.activePid = toNumber(cells[3])
+      out.uid = toNumber(cells[4], -1)
     } else if (tag === "cpu" || tag === "mem" || tag === "idle") {
       var pid = toNumber(cells[1])
       if (pid <= 0) continue

@@ -16,15 +16,18 @@ current heaviest processes, and the idle apps you can reclaim.
   as load and temperature climb.
 - **Persistent thermals** — CPU temperature and fan RPM stay in the bar whenever
   a reading exists, so nothing important is hidden behind a click.
-- **Live history graphs** — a rolling 60-second window of CPU and memory usage,
+- **Live history graphs** — a 2x2 grid of rolling 60-second windows: CPU and
+  memory load on the first line, temperature and fan speed on the second, all
   drawn as square pixel blocks that shade from red at the baseline to a cool
   accent at the peak. Buffered continuously in the background, so the panel
   opens already populated.
 - **Process lists** — Heaviest CPU (anything above 10% of a core), Heaviest
   Memory (above 200 MiB resident), and Idle Apps (the reclaimable GUI apps), one
   row each with the highlighted metric, the app name, and the full command line.
-- **Reclaim any process** — every row offers consent-confirmed **Quit**
-  (SIGTERM) and **Force** (SIGKILL), and the panel re-surveys after an action.
+- **Your processes, not the OS's** — every user-owned row offers consent-confirmed
+  **Quit** (SIGTERM) and **Force** (SIGKILL); system processes carry a
+  "system" tag instead of a kill affordance, and the panel re-surveys after an
+  action.
 - **In-panel settings** — a drawer that lives in the panel: mode, which items
   the bar shows, memory format, temperature unit and format. No config file
   surfing.
@@ -59,12 +62,14 @@ The panel is keyboard-driven and anchored to the widget:
 
 - **Header** — the resolved CPU model and the RAM/Swap totals, with a gear that
   opens the in-panel settings drawer (`s` also toggles it).
-- **CPU Load History** and **Memory Usage History** — the last 60 seconds in
-  square pixel blocks, red-hot at the baseline, accented at the peaks.
+- **History graphs** — CPU + Memory side by side on the first line,
+  Temperature + Fan speed on the second, the last 60 seconds in square pixel
+  blocks, red-hot at the baseline, accented at the peaks.
 - **Graphics metrics** — card name, load, temperature, VRAM meter, power,
   fan, and core clock (only when a card is present).
 - **Heaviest CPU / Heaviest Memory / Idle Apps** — capped lists of the moment's
-  heaviest consumers. Every row carries the reclaim actions.
+  heaviest consumers. User-owned rows carry **Quit** / **Force**; system rows
+  are tagged and read-only.
 - **Keyboard** — `Escape` closes, `Tab`/`Shift+Tab` switch panels, `r` resamples,
   `c`/`f` toggle °C/°F.
 
