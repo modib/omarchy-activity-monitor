@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "modib.activity-monitor",
   "name": "Activity Monitor",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "modib",
   "license": "MIT",
   "description": "A system activity monitor for the Omarchy bar: CPU and memory load side by side, temperature and fan RPM pinned to the right edge, and a popup panel with live history graphs plus Heaviest CPU, Heaviest Memory, and Idle Apps process lists.",
@@ -51,7 +51,9 @@
       "percentPad": "none",
       "monitors": [],
       "processProbeIntervalSec": 8,
-      "topProcessCount": 5
+      "topProcessCount": 5,
+      "cpuThresholdPct": 10,
+      "memThresholdMib": 200
     },
     "schema": [
       {
@@ -309,6 +311,26 @@
         "step": 1,
         "defaultValue": 5,
         "description": "How many rows each of the Heaviest CPU, Heaviest Memory, and Idle Apps lists shows in the panel (3-5 recommended)."
+      },
+      {
+        "key": "cpuThresholdPct",
+        "type": "integer",
+        "label": "CPU list floor (%)",
+        "min": 1,
+        "max": 400,
+        "step": 1,
+        "defaultValue": 10,
+        "description": "A process only appears in Heaviest CPU while it pulls more than this many percent of a core. Keeps the list short on quiet machines."
+      },
+      {
+        "key": "memThresholdMib",
+        "type": "integer",
+        "label": "Memory list floor (MiB)",
+        "min": 32,
+        "max": 8192,
+        "step": 32,
+        "defaultValue": 200,
+        "description": "A process only appears in Heaviest Memory while its resident set stays above this many MiB. Keeps the list short on quiet machines."
       }
     ]
   }

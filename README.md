@@ -26,8 +26,10 @@ current heaviest processes, and the idle apps you can reclaim.
   Memory (anything above the memory threshold), and Idle Apps (the reclaimable
   GUI apps), one row each with the highlighted metric, the app name, and the
   full command line. Thresholds keep the lists short: a quiet machine shows few
-  or no rows instead of padding. `topProcessCount`, `cpuThresholdPct`, and
-  `memThresholdMib` tune the length.
+  or no rows instead of padding, and an empty list says exactly that — the CPU
+  list reports "No process is over N% core right now." and the memory list
+  reports "No process is over N MiB resident right now.". `topProcessCount`,
+  `cpuThresholdPct`, and `memThresholdMib` tune the length.
 - **Quiet, on your own processes** — rows belonging to the OS keep a faint
   tinted background and never carry actions; your own rows stay plain until you
   hover, when a subtle **Quit** (SIGTERM) / **Force** (SIGKILL) pair appears
