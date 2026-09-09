@@ -69,10 +69,6 @@ Item {
   // lightweight pusher so the graphs glide instead of stepping between ticks.
   // File reads still happen on intervalSec; history just duplicates the latest
   // reading in between, so buffering costs nothing but an array push.
-  // Rolling history of the last 60 seconds, sampled once a second by a
-  // lightweight pusher so the graphs glide instead of stepping between ticks.
-  // File reads still happen on intervalSec; history just duplicates the latest
-  // reading in between, so buffering costs nothing but an array push.
   // CPU entries carry the {user, system, iowait} stack; memory entries carry
   // the {apps, cache, buffers} buckets. Temperature/fan stay scalar.
   property var cpuHistory: []
@@ -417,23 +413,25 @@ Item {
     onTriggered: root.sample()
   }
 
-  // 1s history pusher: appends the latest readings to the rolling buffers
-  // between full samples, keeping the graphs smooth and 60 samples deep.
+  // 1s history pusher: appends the latest readings from every history buffer
+  // between full samples, keeping all four graphs at the same once-a-second
+  // cadence and 60 samples deep. File reads still happen on intervalSec; the
+  // in-between ticks duplicate the latest reading so the graphs glide.
   Timer {
     interval: 1000
     running: root.active
     repeat: true
-    // Re-push the latest reading each tick so the graph fills smoothly
-    // between the intervalSec file reads (which also short-circuit here).
     onTriggered: {
-      var c = root.cpuHistory.slice()
-      if (c.length > 0) c.push(c[c.length - 1])
-      if (c.length > root.historyCap) c.shift()
-      root.cpuHistory = c
-      var m = root.memHistory.slice()
-      if (m.length > 0) m.push(m[m.length - 1])
-      if (m.length > root.historyCap) m.shift()
-      root.memHistory = m
+      function dup(arr) {
+        var out = arr.slice()
+        if (out.length > 0) out.push(out[out.length - 1])
+        if (out.length > root.historyCap) out.shift()
+        return out
+      }
+      root.cpuHistory = dup(root.cpuHistory)
+      root.memHistory = dup(root.memHistory)
+      root.tempHistory = dup(root.tempHistory)
+      root.fanHistory = dup(root.fanHistory)
     }
   }
 

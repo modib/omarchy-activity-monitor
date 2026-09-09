@@ -20,9 +20,10 @@ an explicit consent prompt.
   a reading exists, so nothing important is hidden behind a click.
 - **Live history graphs** — a 2x2 grid of rolling 60-second windows: CPU and
   memory load on the first line, temperature and fan speed on the second, all
-  drawn as the same square-pixel columns. CPU tints each column by
-  **user / system / iowait** and memory by **apps / cache / buffers**, so the
-  breakdown is visible without a legend cluttering the cards. Buffered
+  drawn as the same square-pixel columns. All four cards sample on the same
+  once-a-second cadence. CPU tints each column by **user / system / iowait**
+  and memory by **apps / cache / buffers**, each stack labelled with a small
+  legend row; temperature and fan are single-tone so they carry none. Buffered
   continuously in the background, so the panel opens already populated.
 - **Process lists** — Heaviest CPU (anything above the CPU threshold) and
   Heaviest Memory (anything above the memory threshold), one row each with the
@@ -72,9 +73,9 @@ The panel is keyboard-driven and anchored to the widget:
   opens the in-panel settings drawer (`s` also toggles it).
 - **History graphs** — CPU + Memory side by side on the first line,
   Temperature + Fan speed on the second, the last 60 seconds, all in matching
-  square-pixel columns. CPU stacks user/system/iowait and Memory
-  apps/cache/buffers by tint, so the breakdown reads at a glance without a
-  legend row.
+  square-pixel columns on the same once-a-second cadence. CPU stacks
+  user/system/iowait and Memory apps/cache/buffers by tint, each with a legend
+  row; temperature and fan stay single-tone.
 - **Graphics metrics** — card name, load, temperature, VRAM meter, power,
   fan, and core clock (only when a card is present).
 - **Heaviest CPU / Heaviest Memory** — capped lists of the moment's heaviest

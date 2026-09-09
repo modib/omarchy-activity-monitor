@@ -432,13 +432,9 @@ Panel {
 
     if (hw.processReport && hw.processReport.ok) {
       var top = hw.processReport.cpu[0]
-      var idle = hw.processReport.idle.length
-      if (top || idle > 0) {
+      if (top) {
         lines.push("")
-        var apps = ""
-        if (top) apps += "Top " + Model.clampText(top.comm, 20) + " " + Model.formatPercent(top.cpuPct)
-        if (idle > 0) apps += (apps ? "  ·  " : "") + idle + " idle"
-        lines.push(apps)
+        lines.push("Top " + Model.clampText(top.comm, 20) + " " + Model.formatPercent(top.cpuPct))
       }
     }
 

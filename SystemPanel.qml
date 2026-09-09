@@ -976,6 +976,36 @@ Text {
         }
       }
 
+      // Series legend — only the stacked load cards (CPU, memory) carry one;
+      // temperature and fan are single-tone so a legend would be noise.
+      Row {
+        visible: graph.stacked
+        spacing: Style.space(10)
+
+        Repeater {
+          model: graph.seriesSpec
+          delegate: Row {
+            spacing: Style.space(4)
+
+            Rectangle {
+              width: Style.space(6)
+              height: Style.space(6)
+              radius: 1.5
+              color: modelData.color
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: modelData.label
+              color: root.dimColor
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+            }
+          }
+        }
+      }
+
       Item {
         id: graphArea
         width: parent.width
