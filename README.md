@@ -3,8 +3,7 @@
 A system activity monitor for the Omarchy bar. CPU, memory, GPU, temperature, and
 fan are read straight from `/proc` and `/sys` and rendered as sleek icon
 readouts; one click opens a keyboard-driven panel with live history graphs, the
-current heaviest processes, and the idle apps you can reclaim without a
-middleman.
+current heaviest processes, and the idle apps you can reclaim.
 
 ![The Activity Monitor panel](assets/preview-panel.png)
 
@@ -21,11 +20,11 @@ middleman.
   drawn as square pixel blocks that shade from red at the baseline to a cool
   accent at the peak. Buffered continuously in the background, so the panel
   opens already populated.
-- **Top processes** — Top CPU (anything above 10% of a core), Top Memory (above
-  100 MiB resident), and Top Idle (the reclaimable GUI apps), one row each with
-  the highlighted metric, the app name, and the full command line.
-- **Reclaim idle apps** — idle rows offer consent-confirmed **Quit** (SIGTERM)
-  and **Force** (SIGKILL), and the panel re-surveys after an action.
+- **Process lists** — Heaviest CPU (anything above 10% of a core), Heaviest
+  Memory (above 200 MiB resident), and Idle Apps (the reclaimable GUI apps), one
+  row each with the highlighted metric, the app name, and the full command line.
+- **Reclaim any process** — every row offers consent-confirmed **Quit**
+  (SIGTERM) and **Force** (SIGKILL), and the panel re-surveys after an action.
 - **In-panel settings** — a drawer that lives in the panel: mode, which items
   the bar shows, memory format, temperature unit and format. No config file
   surfing.
@@ -64,8 +63,8 @@ The panel is keyboard-driven and anchored to the widget:
   square pixel blocks, red-hot at the baseline, accented at the peaks.
 - **Graphics metrics** — card name, load, temperature, VRAM meter, power,
   fan, and core clock (only when a card is present).
-- **Top CPU / Top Memory / Top Idle** — capped lists of the moment's heaviest
-  consumers. Idle rows carry the reclaim actions.
+- **Heaviest CPU / Heaviest Memory / Idle Apps** — capped lists of the moment's
+  heaviest consumers. Every row carries the reclaim actions.
 - **Keyboard** — `Escape` closes, `Tab`/`Shift+Tab` switch panels, `r` resamples,
   `c`/`f` toggle °C/°F.
 
@@ -95,7 +94,7 @@ figure.
 | GPU | its own `sysfs` counter | load, edge temperature, VRAM, board power, fan, core clock |
 | GPU (NVIDIA) | `nvidia-smi` | the same telemetry, polled on the same interval |
 | Load average | `/proc/loadavg` | 1/5/15 minute |
-| Processes | [`proc-probe`](proc-probe) survey | top CPU, top memory, reclaimable idle GUI apps |
+| Processes | [`proc-probe`](proc-probe) survey | Heaviest CPU, Heaviest Memory, and Idle Apps |
 
 ## How it samples
 
@@ -129,7 +128,7 @@ panel renders a dash rather than a zero that looks like real data.
 ## What counts as "idle"
 
 The reclaim list only ever offers user-owned GUI applications: a process counts
-when it owns a window on the compositor. To appear in the Top Idle table it must
+when it owns a window on the compositor. To appear in the Idle Apps table it must
 also be below the idle CPU threshold, hold at least the idle memory threshold,
 not be the focused window, and not be a system component.
 

@@ -37,9 +37,9 @@ KeyboardPanel {
     return secs >= 120 ? Math.floor(secs / 60) + " min" : secs + "s"
   }
 
-  // Process list state. Three fixed lists (Top CPU, Top RAM,
-  // Top Idle) each capped at a handful of rows; pending* is the one-shot
-  // confirm state for a kill offered on idle rows only.
+  // Process list state. Three fixed lists (Heaviest CPU, Heaviest Memory,
+  // Idle Apps) each capped at a handful of rows; pending* is the one-shot
+  // confirm state for a kill offered on any row.
   property int topProcessCount: 15
   property int pendingPid: 0
   property string pendingSig: ""
@@ -47,9 +47,9 @@ KeyboardPanel {
 
   readonly property int sectionRows: Math.min(Math.max(root.topProcessCount, 1), 5)
 
-  // Top CPU only counts processes pulling more than 10% of a core; Top Memory
-  // only counts processes above 100 MiB resident. Both lists still cap rows so
-  // the panel stays short.
+  // Heaviest CPU only counts processes pulling more than 10% of a core;
+  // Heaviest Memory only counts processes above 200 MiB resident. Both lists
+  // still cap rows so the panel stays short.
   function sliceProcessList(report, key, filter) {
     var arr = report && report.ok ? report[key] : []
     if (arr === undefined || arr === null) arr = []
@@ -65,7 +65,7 @@ KeyboardPanel {
     return e && isFinite(e.cpuPct) && e.cpuPct > 10
   })
   readonly property var processMemList: sliceProcessList(hw.processReport, "mem", function(e) {
-    return e && isFinite(e.rssKib) && e.rssKib > 102400
+    return e && isFinite(e.rssKib) && e.rssKib > 204800
   })
   readonly property var processIdleList: sliceProcessList(hw.processReport, "idle")
 
@@ -530,7 +530,7 @@ Text {
           }
         }
 
-        // 2. CPU Load History Graph above the Top CPU list
+        // CPU load history graph, above the Heaviest CPU list
         HistoryGraph {
           title: "CPU Load History (" + root.historyWindowLabel + ")"
           values: hw.cpuHistory
@@ -538,8 +538,16 @@ Text {
           currentColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
         }
 
+        // Memory Usage History right after the CPU trend, so the two graphs sit
+        // together as one history block.
+        HistoryGraph {
+          title: "Memory Usage History (" + root.historyWindowLabel + ")"
+          values: hw.memHistory
+          currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "% used") : "–"
+          currentColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
+        }
 
-        // 6. Graphics Telemetry Section (if GPU present)
+        // Graphics Telemetry Section (if GPU present)
         Rectangle {
           width: parent.width
           implicitHeight: gpuCol.implicitHeight + Style.space(24)
@@ -660,9 +668,9 @@ Text {
           }
         }
 
-        // 7-9. Three short process lists — Top CPU, Top RAM, Top Idle — are the
-        // reason the panel exists. Idle shows the reclaimable set and is the
-        // only one offering consent-confirmed quit/force actions.
+        // Three short process lists — Heaviest CPU, Heaviest Memory, Idle Apps — are
+        // the reason the panel exists. Every row offers consent-confirmed
+        // Quit / Force actions.
         Text {
           textFormat: Text.PlainText
           width: parent.width
@@ -675,22 +683,15 @@ Text {
         }
 
         ProcessSection {
-          title: "Top CPU"
+          title: "Heaviest CPU"
           glyph: "\uF4BC"
           listModel: root.processCpuList
           scope: "cpu"
           emptyText: "No running processes."
         }
 
-        HistoryGraph {
-          title: "Memory Usage History (" + root.historyWindowLabel + ")"
-          values: hw.memHistory
-          currentText: hw.memPercent >= 0 ? (Math.round(hw.memPercent) + "% used") : "–"
-          currentColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
-        }
-
         ProcessSection {
-          title: "Top Memory"
+          title: "Heaviest Memory"
           glyph: "\uEFC5"
           listModel: root.processMemList
           scope: "mem"
@@ -698,7 +699,7 @@ Text {
         }
 
         ProcessSection {
-          title: "Top Idle"
+          title: "Idle Apps"
           glyph: "\uF2A3"
           listModel: root.processIdleList
           scope: "idle"
@@ -755,8 +756,8 @@ Text {
     }
   }
 
-  // A titled, capped process list. Idle rows are the reclaimable ones, so that
-  // section alone offers the kill-action column; CPU/RAM lists are read-only.
+  // A titled, capped process list. Every row offers consent-confirmed Quit and
+  // Force actions; the scope only changes which metric is highlighted.
   component ProcessSection: Rectangle {
     id: section
     property string title: ""
@@ -854,8 +855,8 @@ Text {
     }
   }
 
-  // A titled history graph card used twice: CPU load above the Top CPU list and
-  // memory usage above the Top Memory list. Samples are 0-100 percent values
+  // A titled history graph card used twice: CPU load and memory usage, shown as
+  // a pair right above the process lists. Samples are 0-100 percent values
   // drawn as square pixel blocks shading from hot red at the baseline up to a
   // translucent accent tint at the top of a full column.
   component HistoryGraph: Rectangle {
@@ -1012,8 +1013,9 @@ Text {
       anchors.margins: Style.space(4)
       spacing: Style.space(10)
 
-      // Scope-specific metric, highlighted: CPU% (Top CPU / Top Idle) or
-      // resident memory (Top Memory). Single line of type, name, then cmdline.
+      // Scope-specific metric, highlighted: CPU% for the Heaviest CPU and Idle Apps
+      // lists, resident memory for Heaviest Memory. Single line of type, name,
+      // then cmdline.
       Text {
         textFormat: Text.PlainText
         width: Style.space(52)
@@ -1052,10 +1054,11 @@ Text {
         anchors.verticalCenter: parent.verticalCenter
       }
 
-      // Action column: only idle rows are reclaimable and offer a consent-gated
-      // quit/force; CPU and RAM lists stay read-only.
+      // Action column: every row offers consent-gated Quit / Force, so a
+      // runaway can be reined in from Heaviest CPU, Heaviest Memory, or the
+      // Idle Apps reclaim set.
       Item {
-        width: prow.scope === "idle" ? Style.space(88) : 0
+        width: Style.space(88)
 
         Row {
           anchors.right: parent.right
@@ -1066,14 +1069,12 @@ Text {
           ModeChip {
             label: "Quit"
             selected: false
-            visible: prow.scope === "idle"
             onPicked: prow.quitRequested()
           }
           ModeChip {
             label: "Force"
             selected: false
             activeColor: prow.hotColor
-            visible: prow.scope === "idle"
             onPicked: prow.forceRequested()
           }
         }
@@ -1086,7 +1087,7 @@ Text {
 
           Text {
             textFormat: Text.PlainText
-            text: "Quit " + Model.clampText(prow.pendingComm, 10) + "?"
+            text: (prow.pendingSignal === "kill" ? "Force " : "Quit ") + Model.clampText(prow.pendingComm, 10) + "?"
             color: prow.hotColor
             font.family: prow.fontFamily
             font.pixelSize: Style.font.caption
