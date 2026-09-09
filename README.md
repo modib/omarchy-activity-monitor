@@ -207,7 +207,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `processProbeIntervalSec` | int | `8` | Seconds between process surveys. |
 | `topProcessCount` | int | `5` | Max rows per list in the panel (capped at 5). |
 | `cpuThresholdPct` | int | `10` | CPU% floor for the Heaviest CPU list. |
-| `memThresholdMib` | int | `200` | Resident-size floor (MiB) for Heaviest Memory. |
+| `memThresholdMib` | int | `0` | Resident-size floor (MiB) for Heaviest Memory; `0` picks 10% of total RAM automatically. |
 
 ## IPC
 

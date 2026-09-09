@@ -53,7 +53,7 @@
       "processProbeIntervalSec": 8,
       "topProcessCount": 5,
       "cpuThresholdPct": 10,
-      "memThresholdMib": 200
+      "memThresholdMib": 0
     },
     "schema": [
       {
@@ -326,11 +326,11 @@
         "key": "memThresholdMib",
         "type": "integer",
         "label": "Memory list floor (MiB)",
-        "min": 32,
+        "min": 0,
         "max": 8192,
         "step": 32,
-        "defaultValue": 200,
-        "description": "A process only appears in Heaviest Memory while its resident set stays above this many MiB. Keeps the list short on quiet machines."
+        "defaultValue": 0,
+        "description": "A process only appears in Heaviest Memory while its resident set stays above this many MiB. 0 chooses automatically: 10% of this machine's total RAM. Keeps the list short on quiet machines."
       }
     ]
   }

@@ -35,19 +35,30 @@ KeyboardPanel {
   // confirm state for a kill offered on any row.
   property int topProcessCount: 15
   property int cpuThresholdPct: 10
-  property int memThresholdMib: 200
+  property int memThresholdMib: 0
   property int pendingPid: 0
   property string pendingSig: ""
   property string pendingComm: ""
 
   readonly property int sectionRows: Math.min(Math.max(root.topProcessCount, 1), 5)
-  readonly property int memThresholdKib: root.memThresholdMib * 1024
+
+  // memThresholdMib is the configured floor; 0 means "auto", which is 10% of
+  // this machine's total RAM. memThresholdKib is the effective floor used by
+  // the filter and memShowMib what the empty state reports.
+  readonly property int memThresholdKib: root.memThresholdMib > 0
+    ? root.memThresholdMib * 1024
+    : Math.round(Math.max(root.totalMemKib, 1) * 0.1)
+  readonly property int memShowMib: root.memThresholdMib > 0
+    ? root.memThresholdMib
+    : Math.round(Math.max(root.totalMemKib, 1) * 0.1 / 1024)
+  readonly property int totalMemKib: hw.memory && hw.memory.totalKib > 0
+    ? hw.memory.totalKib : 0
 
   // Heaviest CPU only counts processes pulling more than cpuThresholdPct% of a
-  // core; Heaviest Memory only counts processes above memThresholdMib MiB
-  // resident, and both lists cap at sectionRows. The thresholds keep a quiet
-  // machine's lists genuinely short — a row only appears when its process is
-  // actually worth your attention.
+  // core; Heaviest Memory only counts processes above the configured MiB floor
+  // (default: 10% of total RAM), and both lists cap at sectionRows. The
+  // thresholds keep a quiet machine's lists genuinely short — a row only
+  // appears when its process is actually worth your attention.
   function sliceProcessList(report, key, filter) {
     var arr = report && report.ok ? report[key] : []
     if (arr === undefined || arr === null) arr = []
@@ -740,7 +751,7 @@ Text {
           glyph: "\uEFC5"
           listModel: root.processMemList
           scope: "mem"
-          emptyText: "No process is over " + root.memThresholdMib + " MiB resident right now."
+          emptyText: "No process is over " + root.memShowMib + " MiB resident right now."
         }
 
         ProcessSection {

@@ -113,7 +113,7 @@ Panel {
   // re-runs the process survey script.
   readonly property int topProcessCount: intSetting("topProcessCount", 5, 1, 20)
   readonly property int cpuThresholdPct: intSetting("cpuThresholdPct", 10, 1, 400)
-  readonly property int memThresholdMib: intSetting("memThresholdMib", 200, 32, 8192)
+  readonly property int memThresholdMib: intSetting("memThresholdMib", 0, 0, 8192)
 
   readonly property string clickCommand: String(setting("clickCommand", ""))
 
