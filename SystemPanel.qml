@@ -733,7 +733,194 @@ Text {
           }
         }
 
-        // Graphics Telemetry Section (if GPU present)
+        Row {
+          width: parent.width
+          spacing: Style.space(12)
+
+          HistoryGraph {
+            title: "Disk I/O"
+            userWidth: (parent.width - parent.spacing) / 2
+            seriesValues: hw.diskHistory
+            seriesSpec: [
+              { key: "read",  label: "read",  color: Color.accent },
+              { key: "write", label: "write", color: root.hotColor }
+            ]
+            currentText: (hw.diskReadBytesSec > 0 || hw.diskWriteBytesSec > 0)
+              ? ("▲ " + Model.formatBytesRate(hw.diskReadBytesSec) + " · ▼ " + Model.formatBytesRate(hw.diskWriteBytesSec))
+              : "idle"
+            currentColor: (hw.diskReadBytesSec > 0 || hw.diskWriteBytesSec > 0) ? Color.accent : root.dimColor
+          }
+
+          // Storage Capacity Card
+          Rectangle {
+            width: (parent.width - parent.spacing) / 2
+            implicitHeight: storageCol.implicitHeight + Style.space(24)
+            color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+            border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+            border.width: 1
+            radius: Style.cornerRadius
+
+            Column {
+              id: storageCol
+              anchors.fill: parent
+              anchors.margins: Style.space(12)
+              spacing: Style.space(8)
+
+              Row {
+                width: parent.width
+
+                Row {
+                  spacing: Style.space(6)
+                  anchors.verticalCenter: parent.verticalCenter
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: "󰋊"
+                    color: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: "Storage"
+                    color: root.baseColor
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                }
+
+                Item {
+                  width: Math.max(0, parent.width - storageHdrText.implicitWidth - Style.space(60))
+                  height: 1
+                }
+
+                Text {
+                  id: storageHdrText
+                  textFormat: Text.PlainText
+                  property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
+                  text: rootMount ? (Math.round(rootMount.percent) + "%") : "–"
+                  color: rootMount ? root.warm(root.baseColor, Model.severity(rootMount.percent, root.warnPercent, root.criticalPercent)) : root.dimColor
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+              }
+
+              // Root partition meter
+              Column {
+                width: parent.width
+                spacing: Style.space(4)
+                property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
+                readonly property real pct: rootMount ? rootMount.percent : 0
+
+                Row {
+                  width: parent.width
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: "Root ( / )"
+                    color: Qt.darker(root.baseColor, 1.4)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                  }
+
+                  Item {
+                    width: Math.max(0, parent.width - Style.space(80) - rootCapVal.implicitWidth)
+                    height: 1
+                  }
+
+                  Text {
+                    id: rootCapVal
+                    textFormat: Text.PlainText
+                    text: rootMount ? (Model.formatGib(Model.gibFromBytes(rootMount.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(rootMount.totalBytes)) + " GiB") : "–"
+                    color: root.warm(root.baseColor, Model.severity(pct, root.warnPercent, root.criticalPercent))
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+
+                Rectangle {
+                  width: parent.width
+                  height: Style.space(6)
+                  radius: height / 2
+                  color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+
+                Rectangle {
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  width: Math.max(height, parent.width * Math.min(100, Math.max(0, pct)) / 100)
+                  radius: height / 2
+                  color: root.warm(root.baseColor, Model.severity(pct, root.warnPercent, root.criticalPercent))
+                }
+              }
+            }
+
+            // Other mounted filesystems (if any)
+            Repeater {
+              model: hw.diskInfo && hw.diskInfo.mounts ? hw.diskInfo.mounts.filter(function(m) { return m.target !== "/" }) : []
+              delegate: Column {
+                required property var modelData
+                width: parent.width
+                spacing: Style.space(2)
+
+                Row {
+                  width: parent.width
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: modelData.target
+                    color: Qt.darker(root.baseColor, 1.5)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideMiddle
+                    width: Math.min(implicitWidth, Style.space(90))
+                  }
+
+                  Item {
+                    width: Math.max(0, parent.width - Style.space(90) - secCapVal.implicitWidth)
+                    height: 1
+                  }
+
+                  Text {
+                    id: secCapVal
+                    textFormat: Text.PlainText
+                    text: Model.formatGib(Model.gibFromBytes(modelData.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(modelData.totalBytes)) + " GiB"
+                    color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+
+                Rectangle {
+                  width: parent.width
+                  height: Style.space(4)
+                  radius: height / 2
+                  color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+
+                  Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: Math.max(height, parent.width * Math.min(100, Math.max(0, modelData.percent)) / 100)
+                    radius: height / 2
+                    color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Graphics Telemetry Section (if GPU present)
         Rectangle {
           width: parent.width
           implicitHeight: gpuCol.implicitHeight + Style.space(24)
@@ -851,187 +1038,6 @@ Text {
                 InfoPair { label: "Clock"; value: hw.gpuMhz > 0 ? Model.formatGhz(hw.gpuMhz) : "–" }
                 InfoPair { label: "Fan"; value: hw.gpuRpm >= 0 ? Model.formatRpm(hw.gpuRpm) : "–" }
                 InfoPair { label: "Driver"; value: hw.gpuInfo && hw.gpuInfo.kind ? String(hw.gpuInfo.kind) : "–" }
-              }
-            }
-          }
-        }
-
-        // Storage Telemetry Section
-        Rectangle {
-          width: parent.width
-          implicitHeight: diskCol.implicitHeight + Style.space(24)
-          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
-          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
-          border.width: 1
-          radius: Style.cornerRadius
-          visible: hw.diskInfo && hw.diskInfo.root !== null
-
-          Column {
-            id: diskCol
-            anchors.fill: parent
-            anchors.margins: Style.space(12)
-            spacing: Style.space(10)
-
-            Row {
-              width: parent.width
-
-              Row {
-                spacing: Style.space(6)
-                anchors.verticalCenter: parent.verticalCenter
-
-                Text {
-                  textFormat: Text.PlainText
-                  text: "󰋊"
-                  color: Color.accent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  anchors.verticalCenter: parent.verticalCenter
-                }
-
-                Text {
-                  textFormat: Text.PlainText
-                  text: "Storage"
-                  color: root.baseColor
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  font.bold: true
-                  anchors.verticalCenter: parent.verticalCenter
-                }
-              }
-
-              Item {
-                width: Math.max(0, parent.width - ioRow.implicitWidth - Style.space(90))
-                height: 1
-              }
-
-              // Realtime I/O rate on the right of header
-              Row {
-                id: ioRow
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Style.space(8)
-
-                Text {
-                  textFormat: Text.PlainText
-                  text: "▲ " + Model.formatBytesRate(hw.diskReadBytesSec)
-                  color: root.baseColor
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
-
-                Text {
-                  textFormat: Text.PlainText
-                  text: "▼ " + Model.formatBytesRate(hw.diskWriteBytesSec)
-                  color: root.baseColor
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
-              }
-            }
-
-            // Root partition meter
-            Column {
-              width: parent.width
-              spacing: Style.space(4)
-              property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
-              readonly property real pct: rootMount ? rootMount.percent : 0
-
-              Row {
-                width: parent.width
-
-                Text {
-                  id: diskRootLabel
-                  textFormat: Text.PlainText
-                  text: "Root ( / )"
-                  color: Qt.darker(root.baseColor, 1.4)
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                }
-
-                Item {
-                  width: Math.max(0, parent.width - diskRootLabel.implicitWidth - diskRootValue.implicitWidth)
-                  height: 1
-                }
-
-                Text {
-                  id: diskRootValue
-                  textFormat: Text.PlainText
-                  text: rootMount ? (Model.formatGib(Model.gibFromBytes(rootMount.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(rootMount.totalBytes)) + " GiB (" + Math.round(pct) + "%)") : "–"
-                  color: root.warm(root.baseColor, Model.severity(pct, root.warnPercent, root.criticalPercent))
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                }
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(6)
-                radius: height / 2
-                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.bottom: parent.bottom
-                  width: Math.max(height, parent.width * Math.min(100, Math.max(0, pct)) / 100)
-                  radius: height / 2
-                  color: root.warm(root.baseColor, Model.severity(pct, root.warnPercent, root.criticalPercent))
-                }
-              }
-            }
-
-            // Other mounted filesystems (if any)
-            Repeater {
-              model: hw.diskInfo && hw.diskInfo.mounts ? hw.diskInfo.mounts.filter(function(m) { return m.target !== "/" }) : []
-              delegate: Column {
-                required property var modelData
-                width: parent.width
-                spacing: Style.space(2)
-
-                Row {
-                  width: parent.width
-
-                  Text {
-                    textFormat: Text.PlainText
-                    text: modelData.target
-                    color: Qt.darker(root.baseColor, 1.5)
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideMiddle
-                    width: Math.min(implicitWidth, Style.space(160))
-                  }
-
-                  Item {
-                    width: Math.max(0, parent.width - Style.space(160) - otherDiskVal.implicitWidth)
-                    height: 1
-                  }
-
-                  Text {
-                    id: otherDiskVal
-                    textFormat: Text.PlainText
-                    text: Model.formatGib(Model.gibFromBytes(modelData.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(modelData.totalBytes)) + " GiB (" + Math.round(modelData.percent) + "%)"
-                    color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                  }
-                }
-
-                Rectangle {
-                  width: parent.width
-                  height: Style.space(4)
-                  radius: height / 2
-                  color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
-
-                  Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: Math.max(height, parent.width * Math.min(100, Math.max(0, modelData.percent)) / 100)
-                    radius: height / 2
-                    color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
-                  }
-                }
               }
             }
           }

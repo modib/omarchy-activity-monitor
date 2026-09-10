@@ -66,9 +66,19 @@ Item {
   readonly property real memPercent: memory ? memory.percent : -1
 
   property var diskInfo: null
-  readonly property real diskPercent: diskInfo && diskInfo.root ? diskInfo.root.percent : -1
+  readonly property string diskMount: String(setting("diskMount", "/"))
+  readonly property real diskPercent: {
+    if (!diskInfo || !diskInfo.mounts) return -1
+    for (var i = 0; i < diskInfo.mounts.length; i++) {
+      if (diskInfo.mounts[i].target === root.diskMount) return diskInfo.mounts[i].percent
+    }
+    return diskInfo.root ? diskInfo.root.percent : -1
+  }
   property real diskReadBytesSec: 0
   property real diskWriteBytesSec: 0
+  property real diskPeakBytesSec: 10485760
+  property var diskHistory: []
+  property var _rawDiskHistory: []
   property var _prevDiskSectors: null
   property real _prevDiskTimestamp: 0
 
@@ -175,6 +185,32 @@ Item {
     root.fanHistory = f
   }
 
+  function pushDiskHistory(readBps, writeBps) {
+    var cap = root.historyCap
+    var raw = root._rawDiskHistory.slice()
+    var r = isFinite(readBps) && readBps >= 0 ? readBps : 0
+    var w = isFinite(writeBps) && writeBps >= 0 ? writeBps : 0
+    raw.push({ read: r, write: w })
+    if (raw.length > cap) raw.shift()
+    root._rawDiskHistory = raw
+
+    var peak = 10485760 // 10 MB/s dynamic floor
+    for (var i = 0; i < raw.length; i++) {
+      var tot = raw[i].read + raw[i].write
+      if (tot > peak) peak = tot
+    }
+    root.diskPeakBytesSec = peak
+
+    var norm = []
+    for (var j = 0; j < raw.length; j++) {
+      norm.push({
+        read: Model.clamp(100 * raw[j].read / peak, 0, 100),
+        write: Model.clamp(100 * raw[j].write / peak, 0, 100)
+      })
+    }
+    root.diskHistory = norm
+  }
+
   function sample() {
     statFile.reload()
     var jiffies = Model.parseCpuJiffies(statFile.text())
@@ -219,6 +255,7 @@ Item {
       root.diskWriteBytesSec = diskStats.writeBytesSec
       root._prevDiskSectors = diskStats.sectors
       root._prevDiskTimestamp = now
+      root.pushDiskHistory(diskStats.readBytesSec, diskStats.writeBytesSec)
     }
 
     if (gpuIsNvidia) {
@@ -488,6 +525,7 @@ Item {
       root.memHistory = dup(root.memHistory)
       root.tempHistory = dup(root.tempHistory)
       root.fanHistory = dup(root.fanHistory)
+      root.diskHistory = dup(root.diskHistory)
     }
   }
 

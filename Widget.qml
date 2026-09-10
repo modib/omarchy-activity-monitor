@@ -92,6 +92,8 @@ Panel {
     return ["percent", "used/total", "used", "free", "available"].indexOf(want) === -1 ? "percent" : want
   }
 
+  readonly property string diskMount: String(setting("diskMount", "/"))
+
   readonly property string tempFormat: {
     var want = String(setting("tempFormat", "degree-unit")).trim().toLowerCase()
     return ["degree-unit", "degree", "unit", "unit-lower", "bare"].indexOf(want) === -1 ? "degree-unit" : want
@@ -264,12 +266,20 @@ Panel {
 
   function diskText() {
     if (diskFormat === "percent") return percentText(hw.diskPercent)
-    if (!hw.diskInfo || !hw.diskInfo.root) return "–"
+    if (!hw.diskInfo || !hw.diskInfo.mounts) return "–"
 
-    var rootDisk = hw.diskInfo.root
-    var usedGib = Model.gibFromBytes(rootDisk.usedBytes)
-    var totalGib = Model.gibFromBytes(rootDisk.totalBytes)
-    var availGib = Model.gibFromBytes(rootDisk.availBytes)
+    var selectedMount = hw.diskInfo.root
+    for (var i = 0; i < hw.diskInfo.mounts.length; i++) {
+      if (hw.diskInfo.mounts[i].target === root.diskMount) {
+        selectedMount = hw.diskInfo.mounts[i]
+        break
+      }
+    }
+    if (!selectedMount) return "–"
+
+    var usedGib = Model.gibFromBytes(selectedMount.usedBytes)
+    var totalGib = Model.gibFromBytes(selectedMount.totalBytes)
+    var availGib = Model.gibFromBytes(selectedMount.availBytes)
 
     if (diskFormat === "used") {
       return Model.formatGibPrecise(usedGib) + "G"

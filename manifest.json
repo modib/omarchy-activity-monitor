@@ -32,6 +32,7 @@
       "showFan": true,
       "showDisk": false,
       "diskFormat": "percent",
+      "diskMount": "/",
       "diskIcon": "󰋊",
       "diskIconRotation": 0,
       "showGauges": true,
@@ -151,6 +152,13 @@
         ],
         "defaultValue": "percent",
         "description": "'percent' (8%), 'used/total' (70/930G), 'used' (70.0G), 'free' (860.0G), or 'available' (860.0G)."
+      },
+      {
+        "key": "diskMount",
+        "type": "string",
+        "label": "Monitored mount point",
+        "defaultValue": "/",
+        "description": "The filesystem mount point to monitor and display in the bar (default: '/')."
       },
       {
         "key": "tempFormat",
