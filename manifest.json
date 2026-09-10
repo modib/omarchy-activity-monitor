@@ -6,7 +6,7 @@
   "version": "1.4.1",
   "author": "modib",
   "license": "MIT",
-  "description": "A system activity monitor for the Omarchy bar: CPU, GPU, and memory load side by side, temperature and fan RPM pinned to the right edge, and a popup panel with live history graphs plus Heaviest CPU and Heaviest Memory process lists.",
+  "description": "A system activity monitor for the Omarchy bar: live CPU, GPU, memory, temperature, and fan telemetry with rolling history graphs and ranked process lists — so the next time your machine starts sweating, you'll know exactly who's making it run.",
   "repository": "https://github.com/modib/omarchy-activity-monitor",
   "kinds": [
     "bar-widget"

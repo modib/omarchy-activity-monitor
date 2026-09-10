@@ -245,6 +245,7 @@ Text {
               }
 
             Column {
+              id: titleCol
               width: parent.width - Style.font.display - Style.space(10)
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(2)
@@ -259,15 +260,17 @@ Text {
                 font.bold: true
               }
 
-              // Single line, elided: the full CPU model string is longer than
-              // the header column, and wrapping left "Swap" dangling alone
-              // on a second row.
+              // Single line, fully visible, never wrapped: the "@ clock" suffix
+              // is dropped from the CPU model (live clock is sampled anyway)
+              // and the size steps one below caption, so
+              // "Model | X GiB RAM | X GiB Swap" fits the header column.
+              // Elide stays only as a backstop for unusually long names.
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
                 wrapMode: Text.NoWrap
                 elide: Text.ElideRight
-                text: (hw.cpuInfo && hw.cpuInfo.model ? hw.cpuInfo.model : "System Telemetry")
+                text: (hw.cpuInfo && hw.cpuInfo.model ? String(hw.cpuInfo.model).split(" @")[0] : "System Telemetry")
                   + (hw.memory && hw.memory.totalKib > 0
                      ? " | " + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + " GiB RAM"
                        + (hw.memory.swapTotalKib > 0
@@ -276,23 +279,26 @@ Text {
                      : "")
                 color: root.dimColor
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                font.pixelSize: Math.max(9, Style.font.caption - 1)
                 font.bold: true
               }
             }
           }
 
           // Gear Icon for In-Panel Settings — a bare glyph pinned to the header's
-          // top-right corner, aligned with the "Activity Monitor" title line,
-          // and a persistent foreground white like the rest of the panel text.
-          // The hitbox is a touch-sized square around the glyph so it stays
-          // tappable even though the visible mark is small.
+          // top-right corner, title-sized in persistent foreground white like
+          // the heading beside it. NOTE: this engine rejects anchor lines to
+          // anything that is not a parent or sibling (the shell log shows
+          // "Cannot anchor to an item that isn't a parent or sibling"), so the
+          // gear is placed with an explicit y instead of anchoring to the
+          // title. The -2 seats the baseline-sitting gear ink against the
+          // title's cap height (pixel-verified on this machine's bar font).
           Item {
             id: settingsButton
             implicitWidth: Math.max(settingsGlyph.implicitWidth, Style.space(28))
             implicitHeight: Math.max(settingsGlyph.implicitHeight, Style.space(28))
             anchors.right: parent.right
-            anchors.verticalCenter: headerTitle.verticalCenter
+            y: headerLeft.y + titleCol.y + headerTitle.y + (headerTitle.height - height) / 2 - 2
 
             Text {
               id: settingsGlyph
@@ -976,8 +982,8 @@ Text {
 
   // A titled history graph card used twice: CPU load and memory usage, shown as
   // a pair right above the process lists. Samples are 0-100 percent values
-  // drawn as square pixel blocks shading from hot red at the baseline up to a
-  // translucent accent tint at the top of a full column.
+  // drawn as square pixel blocks shading from a translucent accent tint at
+  // the baseline up to hot red at the top of a full column.
   component HistoryGraph: Rectangle {
     id: graph
     property string title: ""
@@ -1078,22 +1084,24 @@ Text {
           : (graph.values ? graph.values.length : 0)
         readonly property real colWidth: width / Math.max(1, cols)
 
-        // Bottom-up ramp shared by every column: the base of a column is the
-        // urgent red, fading up through orange into a translucent accent tint,
-        // so a taller column reads hotter than a short one.
+        // Bottom-up ramp shared by every scalar column: a cool translucent
+        // accent at the baseline rising to urgent red at the top, so a
+        // taller column reads hotter than a short one — bright on top means
+        // hotter/faster, cool at the bottom means idle.
         readonly property color barTop: root.hotColor
         readonly property color barBottom: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.6)
         readonly property int block: Math.max(2, Math.min(5, Math.floor(colWidth - 1)))
         readonly property int stride: block + 1
         readonly property int maxBlocks: Math.max(1, Math.floor(height / stride))
 
-        // Square-pixel tint at a fraction up the column: red at 0, accent at 1.
+        // Square-pixel tint at a fraction up the column: cool accent at 0,
+        // urgent red at 1.
         function rampColor(f) {
           var t = Math.max(0, Math.min(1, f))
-          return Qt.rgba(barTop.r + (barBottom.r - barTop.r) * t,
-                         barTop.g + (barBottom.g - barTop.g) * t,
-                         barTop.b + (barBottom.b - barTop.b) * t,
-                         barTop.a + (barBottom.a - barTop.a) * t)
+          return Qt.rgba(barBottom.r + (barTop.r - barBottom.r) * t,
+                          barBottom.g + (barTop.g - barBottom.g) * t,
+                          barBottom.b + (barTop.b - barBottom.b) * t,
+                          barBottom.a + (barTop.a - barBottom.a) * t)
         }
 
         Text {
@@ -1107,7 +1115,8 @@ Text {
         }
 
         // Square-pixel columns for every card. Scalar graphs (temperature, fan)
-        // ramp a column from hot red to accent; stacked graphs (CPU, memory)
+        // ramp a column from cool accent at the baseline to hot red at the
+        // top; stacked graphs (CPU, memory)
         // colour each pixel by the series it belongs to — user/system/iowait or
         // apps/cache/buffers — so they share the exact look of the thermals.
         Repeater {
