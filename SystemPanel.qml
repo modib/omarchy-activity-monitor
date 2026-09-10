@@ -259,10 +259,14 @@ Text {
                 font.bold: true
               }
 
+              // Single line, elided: the full CPU model string is longer than
+              // the header column, and wrapping left "Swap" dangling alone
+              // on a second row.
               Text {
                 textFormat: Text.PlainText
                 width: parent.width
-                wrapMode: Text.Wrap
+                wrapMode: Text.NoWrap
+                elide: Text.ElideRight
                 text: (hw.cpuInfo && hw.cpuInfo.model ? hw.cpuInfo.model : "System Telemetry")
                   + (hw.memory && hw.memory.totalKib > 0
                      ? " | " + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + " GiB RAM"
@@ -296,7 +300,7 @@ Text {
               text: "\uF013"
               color: root.baseColor
               font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
+              font.pixelSize: Style.font.title
             }
 
             MouseArea {
