@@ -1,9 +1,9 @@
 # Activity Monitor
 
-A system activity monitor for the Omarchy bar. CPU, memory, GPU, temperature, and
+A system activity monitor for the Omarchy bar. CPU, memory, disk, GPU, temperature, and
 fan are read straight from `/proc` and `/sys` and rendered as sleek icon
-readouts; one click opens a keyboard-driven panel with live history graphs and
-the current heaviest processes. Quit and Force are offered only on your own
+readouts; one click opens a keyboard-driven panel with live history graphs,
+storage meters, and the current heaviest processes. Quit and Force are offered only on your own
 processes, only while you hover — never on system-owned rows and never without
 an explicit consent prompt.
 
@@ -182,14 +182,16 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. |
-| `itemsOrder` | array/string | `"gpu,gpu-temp,cpu,ram,cpu-temp,fan"` | Sequence of telemetry items in the top bar. Missing/disabled items are skipped. |
+| `itemsOrder` | array/string | `"gpu,gpu-temp,cpu,ram,disk,cpu-temp,fan"` | Sequence of telemetry items in the top bar. Missing/disabled items are skipped. |
 | `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card exists). |
 | `showCpu` | bool | `true` | Show CPU load. |
 | `showCpuTemp` | bool | `true` | Show the CPU temperature cell (`icons` mode; inline in `full`/`labels`). |
 | `showGpuTemp` | bool | `false` | Show GPU temperature in the bar (`icons` mode; inline in `full`/`labels`). |
 | `showRam` | bool | `true` | Show memory usage. |
 | `showFan` | bool | `true` | Show the fan RPM cell when a readable fan exists (every mode except `compact`). |
+| `showDisk` | bool | `false` | Show disk storage usage in the bar. |
 | `ramFormat` | string | `"used/total"` | `"used/total"`, `"used"`, `"percent"`, `"free"`, or `"available"`. |
+| `diskFormat` | string | `"percent"` | `"percent"`, `"used/total"`, `"used"`, `"free"`, or `"available"`. |
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"`, `"degree"`, `"unit"`, `"unit-lower"`, or `"bare"`. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
 | `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"` (`"space"` is accepted as `"trail"`). |
@@ -202,7 +204,8 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `gpuTempIcon` | string | `""` | Glyph marking the GPU temperature figure. |
 | `ramIcon` | string | `""` | Glyph marking the memory figure. |
 | `fanIcon` | string | `""` | Glyph marking the fan figure. |
-| `gpuIconRotation` / `cpuIconRotation` / `tempIconRotation` / `gpuTempIconRotation` / `ramIconRotation` / `fanIconRotation` | int | `0` | Glyph rotation in degrees (-360…360). Config-file only. |
+| `diskIcon` | string | `""` | Glyph marking the disk figure. |
+| `gpuIconRotation` / `cpuIconRotation` / `tempIconRotation` / `gpuTempIconRotation` / `ramIconRotation` / `fanIconRotation` / `diskIconRotation` | int | `0` | Glyph rotation in degrees (-360…360). Config-file only. |
 | `iconSize` | int | `0` | Glyph size in pixels; `0` follows the bar's icon font. |
 | `refreshIntervalSec` | int | `2` | Seconds between sensor file reads. |
 | `gpu` | string | `"auto"` | `"auto"`, a card index, or a name substring. |

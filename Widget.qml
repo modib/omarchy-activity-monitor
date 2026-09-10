@@ -67,11 +67,12 @@ Panel {
   readonly property bool showGpuTemp: boolSetting("showGpuTemp", false)
   readonly property bool showRam: boolSetting("showRam", true)
   readonly property bool showFan: boolSetting("showFan", true)
+  readonly property bool showDisk: boolSetting("showDisk", false)
 
   readonly property var itemOrder: {
     // Load figures first; anything thermal or spinning goes on the right.
     // Matches manifest defaults; items without a live cell are skipped.
-    var fallback = ["gpu", "gpu-temp", "cpu", "ram", "cpu-temp", "fan"]
+    var fallback = ["gpu", "gpu-temp", "cpu", "ram", "disk", "cpu-temp", "fan"]
     var raw = setting("itemsOrder", fallback)
     if (raw instanceof Array) return raw.map(function(s) { return String(s).trim().toLowerCase() })
     var text = String(raw || "").trim().toLowerCase()
@@ -84,6 +85,11 @@ Panel {
   readonly property string ramFormat: {
     var want = String(setting("ramFormat", "used/total")).trim().toLowerCase()
     return ["used/total", "used", "percent", "free", "available"].indexOf(want) === -1 ? "used/total" : want
+  }
+
+  readonly property string diskFormat: {
+    var want = String(setting("diskFormat", "percent")).trim().toLowerCase()
+    return ["percent", "used/total", "used", "free", "available"].indexOf(want) === -1 ? "percent" : want
   }
 
   readonly property string tempFormat: {
@@ -130,6 +136,7 @@ Panel {
   readonly property string gpuTempIcon: String(setting("gpuTempIcon", "󰔏"))
   readonly property string ramIcon: String(setting("ramIcon", ""))
   readonly property string fanIcon: String(setting("fanIcon", "\uDB80\uDE10"))
+  readonly property string diskIcon: String(setting("diskIcon", "󰋊"))
 
   readonly property int gpuIconRotation: intSetting("gpuIconRotation", 0, -360, 360)
   readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
@@ -137,6 +144,7 @@ Panel {
   readonly property int gpuTempIconRotation: intSetting("gpuTempIconRotation", 0, -360, 360)
   readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
   readonly property int fanIconRotation: intSetting("fanIconRotation", 0, -360, 360)
+  readonly property int diskIconRotation: intSetting("diskIconRotation", 0, -360, 360)
 
   function boolSetting(name, fallback) {
     var value = setting(name, fallback)
@@ -238,6 +246,36 @@ Panel {
     }
 
     if (ramFormat === "free" || ramFormat === "available") {
+      return Model.formatGibPrecise(availGib) + "G"
+    }
+
+    if (labelled) {
+      return Model.formatGibPrecise(usedGib) + "/" + Model.formatGib(totalGib) + "G"
+    }
+
+    if (mode === "icons") {
+      return Model.formatGib(usedGib) + "/" + Model.formatGib(totalGib) + "G"
+    }
+
+    var used = Model.formatGib(usedGib)
+    var total = Model.formatGib(totalGib)
+    return Model.padLeft(used, 3) + "/" + total
+  }
+
+  function diskText() {
+    if (diskFormat === "percent") return percentText(hw.diskPercent)
+    if (!hw.diskInfo || !hw.diskInfo.root) return "–"
+
+    var rootDisk = hw.diskInfo.root
+    var usedGib = Model.gibFromBytes(rootDisk.usedBytes)
+    var totalGib = Model.gibFromBytes(rootDisk.totalBytes)
+    var availGib = Model.gibFromBytes(rootDisk.availBytes)
+
+    if (diskFormat === "used") {
+      return Model.formatGibPrecise(usedGib) + "G"
+    }
+
+    if (diskFormat === "free" || diskFormat === "available") {
       return Model.formatGibPrecise(availGib) + "G"
     }
 
@@ -371,6 +409,23 @@ Panel {
       }
     }
 
+    // Disk
+    if (showDisk && hw.diskPercent >= 0) {
+      cellMap["disk"] = {
+        key: "disk",
+        label: "DISK",
+        icon: diskIcon,
+        iconRotation: diskIconRotation,
+        value: diskText(),
+        pad: percentPadFor(hw.diskPercent),
+        slotted: percentPad === "trail",
+        temp: "",
+        tempC: -1,
+        ratio: hw.diskPercent / 100,
+        severity: Model.severity(hw.diskPercent, warnPercent, criticalPercent)
+      }
+    }
+
     var out = []
     var added = {}
     for (var i = 0; i < itemOrder.length; i++) {
@@ -381,7 +436,7 @@ Panel {
       }
     }
     // Append any enabled items not in itemOrder
-    var fallbackOrder = ["gpu", "cpu", "ram", "cpu-temp", "fan", "gpu-temp"]
+    var fallbackOrder = ["gpu", "cpu", "ram", "disk", "cpu-temp", "fan", "gpu-temp"]
     for (var j = 0; j < fallbackOrder.length; j++) {
       var fk = fallbackOrder[j]
       if (cellMap[fk] && !added[fk]) {
@@ -445,6 +500,19 @@ Panel {
                     ? "  ·  Swap " + Model.formatGib(Model.gibFromKib(hw.memory.swapUsedKib)) + " / "
                       + Model.formatGib(Model.gibFromKib(hw.memory.swapTotalKib)) + " GiB"
                     : ""))
+    }
+
+    if (hw.diskInfo && hw.diskInfo.root) {
+      lines.push("")
+      var rootDisk = hw.diskInfo.root
+      var rootUsedGib = Model.gibFromBytes(rootDisk.usedBytes)
+      var rootTotalGib = Model.gibFromBytes(rootDisk.totalBytes)
+      lines.push("Disk " + Model.formatGib(rootUsedGib) + " / "
+                 + Model.formatGib(rootTotalGib) + " GiB  ·  "
+                 + Model.formatPercent(rootDisk.percent))
+      if (hw.diskReadBytesSec > 0 || hw.diskWriteBytesSec > 0) {
+        lines.push("I/O  ▲ " + Model.formatBytesRate(hw.diskReadBytesSec) + "  ▼ " + Model.formatBytesRate(hw.diskWriteBytesSec))
+      }
     }
 
     if (hw.processReport && hw.processReport.ok) {
@@ -605,7 +673,9 @@ Panel {
     showGpuTemp: root.showGpuTemp
     showRam: root.showRam
     showFan: root.showFan
+    showDisk: root.showDisk
     ramFormat: root.ramFormat
+    diskFormat: root.diskFormat
     tempFormat: root.tempFormat
     showGauges: root.showGauges
     showValues: root.showValues

@@ -3,10 +3,10 @@
   "schemaVersion": 1,
   "id": "modib.activity-monitor",
   "name": "Activity Monitor",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "author": "modib",
   "license": "MIT",
-  "description": "A system activity monitor for the Omarchy bar: live CPU, GPU, memory, temperature, and fan telemetry with rolling history graphs and ranked process lists — so the next time your machine starts sweating, you'll know exactly who's making it run.",
+  "description": "A system activity monitor for the Omarchy bar: live CPU, GPU, memory, disk, temperature, and fan telemetry with rolling history graphs and ranked process lists — so the next time your machine starts sweating, you'll know exactly who's making it run.",
   "repository": "https://github.com/modib/omarchy-activity-monitor",
   "kinds": [
     "bar-widget"
@@ -16,13 +16,13 @@
   },
   "barWidget": {
     "displayName": "Activity Monitor",
-    "description": "CPU, RAM, GPU, temperature, and fan load as sleek icon readouts, with a popup that ranks the heaviest CPU and memory consumers. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
+    "description": "CPU, RAM, disk, GPU, temperature, and fan load as sleek icon readouts, with a popup that ranks the heaviest CPU and memory consumers. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
     "category": "System",
     "allowMultiple": true,
     "defaultSection": "right",
     "defaults": {
       "mode": "icons",
-      "itemsOrder": ["gpu", "gpu-temp", "cpu", "ram", "cpu-temp", "fan"],
+      "itemsOrder": ["gpu", "gpu-temp", "cpu", "ram", "disk", "cpu-temp", "fan"],
       "refreshIntervalSec": 2,
       "showGpu": true,
       "showCpu": true,
@@ -30,6 +30,10 @@
       "showGpuTemp": false,
       "showRam": true,
       "showFan": true,
+      "showDisk": false,
+      "diskFormat": "percent",
+      "diskIcon": "󰋊",
+      "diskIconRotation": 0,
       "showGauges": true,
       "showValues": false,
       "iconSize": 0,
@@ -75,8 +79,8 @@
         "key": "itemsOrder",
         "type": "string",
         "label": "Item sequence",
-        "defaultValue": "gpu,gpu-temp,cpu,ram,cpu-temp,fan",
-        "description": "Order of telemetry items in the bar, comma-separated: 'gpu,gpu-temp,cpu,ram,cpu-temp,fan' with load figures first and temperature/fan on the right. Items whose sensor is missing or toggled off are skipped."
+        "defaultValue": "gpu,gpu-temp,cpu,ram,disk,cpu-temp,fan",
+        "description": "Order of telemetry items in the bar, comma-separated: 'gpu,gpu-temp,cpu,ram,disk,cpu-temp,fan' with load figures first and temperature/fan on the right. Items whose sensor is missing or toggled off are skipped."
       },
       {
         "key": "showGpu",
@@ -126,6 +130,27 @@
         ],
         "defaultValue": "used/total",
         "description": "'used/total' (12/23G), 'used' (12.3G), 'percent' (52%), 'free' (11.1G), or 'available' (11.1G)."
+      },
+      {
+        "key": "showDisk",
+        "type": "boolean",
+        "label": "Show disk storage",
+        "defaultValue": false,
+        "description": "Show disk storage usage in the top bar."
+      },
+      {
+        "key": "diskFormat",
+        "type": "enum",
+        "label": "Disk format",
+        "options": [
+          "percent",
+          "used/total",
+          "used",
+          "free",
+          "available"
+        ],
+        "defaultValue": "percent",
+        "description": "'percent' (8%), 'used/total' (70/930G), 'used' (70.0G), 'free' (860.0G), or 'available' (860.0G)."
       },
       {
         "key": "tempFormat",
@@ -221,6 +246,12 @@
         "defaultValue": ""
       },
       {
+        "key": "diskIcon",
+        "type": "string",
+        "label": "Disk glyph",
+        "defaultValue": "󰋊"
+      },
+      {
         "key": "gpuIconRotation",
         "type": "integer",
         "label": "GPU glyph rotation (°)",
@@ -279,6 +310,16 @@
         "step": 15,
         "defaultValue": 0,
         "description": "Rotate the fan glyph in degrees. Config-file only."
+      },
+      {
+        "key": "diskIconRotation",
+        "type": "integer",
+        "label": "Disk glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the disk glyph in degrees. Config-file only."
       },
       {
         "key": "iconSize",

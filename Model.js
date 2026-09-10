@@ -198,6 +198,99 @@ function parseNvidia(raw) {
   }
 }
 
+// --------------------------------------------------------------------- disk
+
+// Parse df output with fixed columns: size, used, avail, pcent, target, source
+function parseDiskUsage(raw) {
+  var text = String(raw || "").trim()
+  if (!text) return null
+  var lines = text.split("\n")
+  if (lines.length < 2) return null
+
+  var mounts = []
+  var seenSource = {}
+  var rootMount = null
+
+  for (var i = 1; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (!line) continue
+    var parts = line.split(/\s+/)
+    if (parts.length < 5) continue
+
+    var size = toNumber(parts[0])
+    var used = toNumber(parts[1])
+    var avail = toNumber(parts[2])
+    var pcent = toNumber(parts[3].replace("%", ""))
+    var target = parts[4]
+    var source = parts.length > 5 ? parts[parts.length - 1] : target
+
+    if (size <= 0) continue
+    // Skip virtual or image mounts that do not originate from /dev/
+    if (source.indexOf("/dev/") !== 0) continue
+
+    var entry = {
+      target: target,
+      source: source,
+      totalBytes: size,
+      usedBytes: used,
+      availBytes: avail,
+      percent: clamp(pcent, 0, 100)
+    }
+
+    if (target === "/") {
+      rootMount = entry
+    }
+
+    if (!seenSource[source] || target === "/") {
+      seenSource[source] = entry
+      mounts.push(entry)
+    }
+  }
+
+  if (!rootMount && mounts.length > 0) rootMount = mounts[0]
+  return { root: rootMount, mounts: mounts }
+}
+
+// Parse /proc/diskstats for whole physical block devices
+function parseDiskStats(raw, prevSectors, deltaSec) {
+  var text = String(raw || "").trim()
+  if (!text) return null
+  var lines = text.split("\n")
+  var readSectors = 0
+  var writeSectors = 0
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (!line) continue
+    var parts = line.split(/\s+/)
+    if (parts.length < 10) continue
+    var dev = parts[2]
+    // Only aggregate whole physical devices, ignore partition slices to prevent double counting
+    if (/^([hsv]d[a-z]+|nvme\d+n\d+|mmcblk\d+|vd[a-z]+)$/.test(dev)) {
+      readSectors += toNumber(parts[5])
+      writeSectors += toNumber(parts[9])
+    }
+  }
+
+  var currentSectors = { read: readSectors, write: writeSectors }
+  if (!prevSectors || !(deltaSec > 0)) {
+    return {
+      readBytesSec: 0,
+      writeBytesSec: 0,
+      sectors: currentSectors
+    }
+  }
+
+  var readDelta = Math.max(0, readSectors - prevSectors.read)
+  var writeDelta = Math.max(0, writeSectors - prevSectors.write)
+
+  return {
+    readBytesSec: (readDelta * 512) / deltaSec,
+    writeBytesSec: (writeDelta * 512) / deltaSec,
+    sectors: currentSectors
+  }
+}
+
 // -------------------------------------------------------------- formatting
 
 function gibFromKib(kib) {
@@ -254,6 +347,14 @@ function formatWatts(watts) {
 function formatRpm(rpm) {
   if (!isFinite(rpm) || rpm < 0) return "–"
   return rpm === 0 ? "idle" : Math.round(rpm) + " rpm"
+}
+
+function formatBytesRate(bytesSec) {
+  if (!isFinite(bytesSec) || bytesSec < 0) return "–"
+  if (bytesSec < 1024) return Math.round(bytesSec) + " B/s"
+  if (bytesSec < 1048576) return Math.round(bytesSec / 1024) + " KB/s"
+  if (bytesSec < 1073741824) return (bytesSec / 1048576).toFixed(1) + " MB/s"
+  return (bytesSec / 1073741824).toFixed(1) + " GB/s"
 }
 
 // ----------------------------------------------------------------- processes

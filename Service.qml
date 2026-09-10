@@ -65,6 +65,13 @@ Item {
   property var memory: null
   readonly property real memPercent: memory ? memory.percent : -1
 
+  property var diskInfo: null
+  readonly property real diskPercent: diskInfo && diskInfo.root ? diskInfo.root.percent : -1
+  property real diskReadBytesSec: 0
+  property real diskWriteBytesSec: 0
+  property var _prevDiskSectors: null
+  property real _prevDiskTimestamp: 0
+
   // Rolling history of the last 60 seconds, sampled once a second by a
   // lightweight pusher so the graphs glide instead of stepping between ticks.
   // File reads still happen on intervalSec; history just duplicates the latest
@@ -203,6 +210,17 @@ Item {
 
     root.pushSensorHistory(cpuTempC, fanRpm)
 
+    diskstatsFile.reload()
+    var now = Date.now()
+    var deltaSec = root._prevDiskTimestamp > 0 ? (now - root._prevDiskTimestamp) / 1000 : 0
+    var diskStats = Model.parseDiskStats(diskstatsFile.text(), root._prevDiskSectors, deltaSec)
+    if (diskStats) {
+      root.diskReadBytesSec = diskStats.readBytesSec
+      root.diskWriteBytesSec = diskStats.writeBytesSec
+      root._prevDiskSectors = diskStats.sectors
+      root._prevDiskTimestamp = now
+    }
+
     if (gpuIsNvidia) {
       sampleNvidia()
       return
@@ -270,6 +288,7 @@ Item {
   FileView { id: memFile; path: "/proc/meminfo"; blockAllReads: true; printErrors: false }
   FileView { id: cpuinfoFile; path: "/proc/cpuinfo"; blockAllReads: true; printErrors: false }
   FileView { id: loadFile; path: "/proc/loadavg"; blockAllReads: true; printErrors: false }
+  FileView { id: diskstatsFile; path: "/proc/diskstats"; blockAllReads: true; printErrors: false }
 
   FileView {
     id: cpuTempFile
@@ -402,6 +421,36 @@ Item {
     onTriggered: root.refreshProcesses()
   }
 
+  // ----------------------------------------------------------------- storage
+
+  Process {
+    id: diskUsageProcess
+    command: ["df", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "efivarfs", "--output=size,used,avail,pcent,target,source"]
+    stdout: StdioCollector {
+      id: diskUsageOut
+      waitForEnd: true
+      onStreamFinished: {
+        var parsed = Model.parseDiskUsage(text)
+        if (parsed) root.diskInfo = parsed
+      }
+    }
+    stderr: StdioCollector { waitForEnd: true }
+  }
+
+  function refreshDiskUsage() {
+    if (!active || diskUsageProcess.running) return
+    diskUsageProcess.command = ["df", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "efivarfs", "--output=size,used,avail,pcent,target,source"]
+    diskUsageProcess.running = true
+  }
+
+  Timer {
+    id: diskUsageTimer
+    interval: 15000
+    running: root.active
+    repeat: true
+    onTriggered: root.refreshDiskUsage()
+  }
+
   // -------------------------------------------------------------- lifetime
 
   Timer {
@@ -447,6 +496,7 @@ Item {
     sample()
     refreshProbe()
     refreshProcesses()
+    refreshDiskUsage()
   }
 
   onActiveChanged: if (active) start()
