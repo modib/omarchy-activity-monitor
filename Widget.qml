@@ -518,18 +518,28 @@ Panel {
                     : ""))
     }
 
-    if (hw.diskInfo && hw.diskInfo.root) {
-      lines.push("")
-      var rootDisk = hw.diskInfo.root
-      var isGb = diskUnit === "gb"
-      var rootUsed = isGb ? Model.gbFromBytes(rootDisk.usedBytes) : Model.gibFromBytes(rootDisk.usedBytes)
-      var rootTotal = isGb ? Model.gbFromBytes(rootDisk.totalBytes) : Model.gibFromBytes(rootDisk.totalBytes)
-      var uSuffix = isGb ? "GB" : "GiB"
-      lines.push("Disk " + Model.formatGib(rootUsed) + uSuffix + " / "
-                 + Model.formatGib(rootTotal) + uSuffix + "  ·  "
-                 + Model.formatPercent(rootDisk.percent))
-      if (hw.diskReadBytesSec > 0 || hw.diskWriteBytesSec > 0) {
-        lines.push("I/O  ▲ " + Model.formatBytesRate(hw.diskReadBytesSec) + "  ▼ " + Model.formatBytesRate(hw.diskWriteBytesSec))
+    if (hw.diskInfo) {
+      var selDisk = hw.diskInfo.root
+      if (root.diskMount !== "all" && hw.diskInfo.mounts) {
+        for (var dIdx = 0; dIdx < hw.diskInfo.mounts.length; dIdx++) {
+          if (hw.diskInfo.mounts[dIdx].target === root.diskMount) {
+            selDisk = hw.diskInfo.mounts[dIdx]
+            break
+          }
+        }
+      }
+      if (selDisk) {
+        lines.push("")
+        var isGb = diskUnit === "gb"
+        var selUsed = isGb ? Model.gbFromBytes(selDisk.usedBytes) : Model.gibFromBytes(selDisk.usedBytes)
+        var selTotal = isGb ? Model.gbFromBytes(selDisk.totalBytes) : Model.gibFromBytes(selDisk.totalBytes)
+        var uSuffix = isGb ? "GB" : "GiB"
+        lines.push("Disk " + Model.formatGib(selUsed) + uSuffix + " / "
+                   + Model.formatGib(selTotal) + uSuffix + "  ·  "
+                   + Model.formatPercent(selDisk.percent))
+        if (hw.diskReadBytesSec > 0 || hw.diskWriteBytesSec > 0) {
+          lines.push("I/O  ▲ " + Model.formatBytesRate(hw.diskReadBytesSec) + "  ▼ " + Model.formatBytesRate(hw.diskWriteBytesSec))
+        }
       }
     }
 
@@ -613,6 +623,7 @@ Panel {
     function refresh(): void { root.broadcast("refresh") }
     function cycleMode(): void { root.cycleMode() }
     function toggleDiskUnit(): void { root.persistSetting("diskUnit", root.diskUnit === "gib" ? "gb" : "gib") }
+    function setDiskMount(mount: string): void { root.persistSetting("diskMount", mount) }
     function status(): string { return root.detail() }
   }
 
@@ -696,6 +707,7 @@ Panel {
     ramFormat: root.ramFormat
     diskFormat: root.diskFormat
     diskUnit: root.diskUnit
+    diskMount: root.diskMount
     tempFormat: root.tempFormat
     showGauges: root.showGauges
     showValues: root.showValues

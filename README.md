@@ -193,7 +193,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `ramFormat` | string | `"used/total"` | `"used/total"`, `"used"`, `"percent"`, `"free"`, or `"available"`. |
 | `diskFormat` | string | `"percent"` | `"percent"`, `"used/total"`, `"used"`, `"free"`, or `"available"`. |
 | `diskUnit` | string | `"gib"` | `"gib"` for binary (1024³), `"gb"` for decimal (1000³). |
-| `diskMount` | string | `"/"` | Filesystem mount point monitored and drawn in the bar. |
+| `diskMount` | string | `"/"` | Filesystem mount point monitored and drawn in the bar and popup (`"/"`, specific mount, or `"all"`). |
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"`, `"degree"`, `"unit"`, `"unit-lower"`, or `"bare"`. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
 | `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"` (`"space"` is accepted as `"trail"`). |
@@ -235,6 +235,8 @@ omarchy-shell modib.activity-monitor show       # open the panel
 omarchy-shell modib.activity-monitor hide       # close the panel
 omarchy-shell modib.activity-monitor toggle     # toggle the panel
 omarchy-shell modib.activity-monitor toggleFahrenheit
+omarchy-shell modib.activity-monitor toggleDiskUnit
+omarchy-shell modib.activity-monitor setDiskMount "/"
 omarchy-shell modib.activity-monitor cycleMode
 omarchy-shell modib.activity-monitor refresh    # force a resample
 omarchy-shell modib.activity-monitor status     # full telemetry breakdown

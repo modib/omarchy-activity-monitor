@@ -159,7 +159,7 @@
         "type": "string",
         "label": "Monitored mount point",
         "defaultValue": "/",
-        "description": "The filesystem mount point to monitor and display in the bar (default: '/')."
+        "description": "The filesystem mount point to monitor and display in the bar and popup panel (e.g. '/', '/boot', or 'all')."
       },
       {
         "key": "diskUnit",

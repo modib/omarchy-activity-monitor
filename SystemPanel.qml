@@ -32,10 +32,32 @@ KeyboardPanel {
   property string ramFormat: "used/total"
   property string diskFormat: "percent"
   property string diskUnit: "gib"
+  property string diskMount: "/"
   property string tempFormat: "degree-unit"
   property bool showGauges: true
   property bool showValues: false
   property bool settingsOpen: false
+
+  readonly property var selectedDiskMount: {
+    if (!hw.diskInfo || !hw.diskInfo.mounts || hw.diskInfo.mounts.length === 0) return null
+    if (root.diskMount !== "all") {
+      for (var i = 0; i < hw.diskInfo.mounts.length; i++) {
+        if (hw.diskInfo.mounts[i].target === root.diskMount) {
+          return hw.diskInfo.mounts[i]
+        }
+      }
+    }
+    return hw.diskInfo.root || hw.diskInfo.mounts[0]
+  }
+
+  readonly property var displayedMounts: {
+    if (!hw.diskInfo || !hw.diskInfo.mounts) return []
+    if (root.diskMount === "all") {
+      return hw.diskInfo.mounts.slice(0, 5)
+    }
+    var sel = root.selectedDiskMount
+    return sel ? [sel] : []
+  }
 
   // Process list state. Two fixed lists (Heaviest CPU, Heaviest Memory) each
   // capped at sectionRows (max 5); pending* is the one-shot confirm state for
@@ -594,6 +616,44 @@ Text {
               }
             }
 
+            // Monitored Mount
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+              visible: hw.diskInfo && hw.diskInfo.mounts && hw.diskInfo.mounts.length > 0
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Mount"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "All"
+                  selected: root.diskMount === "all"
+                  onPicked: root.persistSetting("diskMount", "all")
+                }
+
+                Repeater {
+                  model: hw.diskInfo ? hw.diskInfo.mounts : []
+                  delegate: ModeChip {
+                    required property var modelData
+                    label: modelData.label || modelData.target
+                    selected: root.diskMount === modelData.target
+                    onPicked: root.persistSetting("diskMount", modelData.target)
+                  }
+                }
+              }
+            }
+
             // Temperature Unit
             Row {
               width: parent.width
@@ -842,109 +902,47 @@ Text {
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
                   textFormat: Text.PlainText
-                  readonly property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
-                  text: rootMount ? (Math.round(rootMount.percent) + "%") : "–"
-                  color: rootMount ? root.warm(root.baseColor, Model.severity(rootMount.percent, root.warnPercent, root.criticalPercent)) : root.dimColor
+                  readonly property var selMount: root.selectedDiskMount
+                  text: selMount ? (Math.round(selMount.percent) + "%") : "–"
+                  color: selMount ? root.warm(root.baseColor, Model.severity(selMount.percent, root.warnPercent, root.criticalPercent)) : root.dimColor
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
                   font.bold: true
                 }
               }
 
-              // Root partition meter
-              Column {
-                id: rootMeter
-                width: parent.width
-                spacing: Style.space(3)
-                readonly property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
-                readonly property real pct: rootMount ? rootMount.percent : 0
-
-                Item {
-                  width: parent.width
-                  height: Math.max(diskRootLabel.implicitHeight, rootCapVal.implicitHeight)
-
-                  Text {
-                    id: diskRootLabel
-                    anchors.left: parent.left
-                    anchors.right: rootCapVal.left
-                    anchors.rightMargin: Style.space(8)
-                    anchors.verticalCenter: parent.verticalCenter
-                    textFormat: Text.PlainText
-                    text: rootMeter.rootMount ? (rootMeter.rootMount.label || Model.formatDiskLabel(rootMeter.rootMount.target, rootMeter.rootMount.source)) : "Linux ( / )"
-                    color: Qt.darker(root.baseColor, 1.3)
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                    elide: Text.ElideRight
-                  }
-
-                  Text {
-                    id: rootCapVal
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    textFormat: Text.PlainText
-                    text: rootMeter.rootMount
-                      ? Model.formatStorageCap(rootMeter.rootMount.usedBytes, rootMeter.rootMount.totalBytes, root.diskUnit)
-                      : "–"
-                    color: root.warm(root.baseColor, Model.severity(rootMeter.pct, root.warnPercent, root.criticalPercent))
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                  }
-                }
-
-                Rectangle {
-                  id: rootBarTrack
-                  width: parent.width
-                  height: Style.space(5)
-                  radius: height / 2
-                  color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                  Rectangle {
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: rootMeter.rootMount && rootMeter.pct > 0
-                      ? Math.max(height, parent.width * Math.min(100, Math.max(0, rootMeter.pct)) / 100)
-                      : 0
-                    radius: height / 2
-                    color: root.warm(root.baseColor, Model.severity(rootMeter.pct, root.warnPercent, root.criticalPercent))
-                    visible: rootMeter.rootMount !== null && rootMeter.pct > 0
-                  }
-                }
-              }
-
-              // Other mounted filesystems (if any)
+              // Displayed partition meter(s)
               Repeater {
-                model: hw.diskInfo && hw.diskInfo.mounts
-                  ? hw.diskInfo.mounts.filter(function(m) { return m.target !== "/" }).slice(0, 4)
-                  : []
+                model: root.displayedMounts
                 delegate: Column {
-                  id: secMeter
+                  id: diskMeter
                   required property var modelData
                   width: parent.width
-                  spacing: Style.space(2)
+                  spacing: Style.space(3)
 
                   Item {
                     width: parent.width
-                    height: Math.max(secLabel.implicitHeight, secCapVal.implicitHeight)
+                    height: Math.max(diskLabel.implicitHeight, diskCapVal.implicitHeight)
 
                     Text {
-                      id: secLabel
+                      id: diskLabel
                       anchors.left: parent.left
-                      anchors.right: secCapVal.left
+                      anchors.right: diskCapVal.left
                       anchors.rightMargin: Style.space(8)
                       anchors.verticalCenter: parent.verticalCenter
                       textFormat: Text.PlainText
                       text: modelData.label || Model.formatDiskLabel(modelData.target, modelData.source)
-                      color: Qt.darker(root.baseColor, 1.5)
+                      color: (root.displayedMounts.length === 1 || root.diskMount === modelData.target)
+                        ? Qt.darker(root.baseColor, 1.3)
+                        : Qt.darker(root.baseColor, 1.5)
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
+                      font.bold: root.displayedMounts.length === 1 || root.diskMount === modelData.target
                       elide: Text.ElideRight
                     }
 
                     Text {
-                      id: secCapVal
+                      id: diskCapVal
                       anchors.right: parent.right
                       anchors.verticalCenter: parent.verticalCenter
                       textFormat: Text.PlainText
@@ -952,14 +950,16 @@ Text {
                       color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption
+                      font.bold: root.displayedMounts.length === 1 || root.diskMount === modelData.target
                     }
                   }
 
                   Rectangle {
+                    id: diskBarTrack
                     width: parent.width
-                    height: Style.space(4)
+                    height: root.displayedMounts.length === 1 ? Style.space(5) : Style.space(4)
                     radius: height / 2
-                    color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+                    color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
 
                     Rectangle {
                       anchors.left: parent.left
@@ -971,6 +971,28 @@ Text {
                       radius: height / 2
                       color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
                       visible: modelData.percent > 0
+                    }
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: (hw.diskInfo && hw.diskInfo.mounts && hw.diskInfo.mounts.length > 1) ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: {
+                      if (!hw.diskInfo || !hw.diskInfo.mounts || hw.diskInfo.mounts.length <= 1) return
+                      var mounts = hw.diskInfo.mounts
+                      if (root.diskMount === "all") {
+                        root.persistSetting("diskMount", modelData.target)
+                      } else {
+                        var idx = -1
+                        for (var i = 0; i < mounts.length; i++) {
+                          if (mounts[i].target === root.diskMount) { idx = i; break }
+                        }
+                        if (idx === -1 || idx === mounts.length - 1) {
+                          root.persistSetting("diskMount", "all")
+                        } else {
+                          root.persistSetting("diskMount", mounts[idx + 1].target)
+                        }
+                      }
                     }
                   }
                 }
