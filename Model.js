@@ -7,6 +7,7 @@
 
 var KIB_PER_GIB = 1048576
 var BYTES_PER_GIB = 1073741824
+var BYTES_PER_GB = 1000000000
 
 function toNumber(value, fallback) {
   var n = Number(String(value).trim())
@@ -332,6 +333,19 @@ function gibFromKib(kib) {
 
 function gibFromBytes(bytes) {
   return bytes / BYTES_PER_GIB
+}
+
+function gbFromBytes(bytes) {
+  if (!isFinite(bytes) || bytes <= 0) return 0
+  return bytes / BYTES_PER_GB
+}
+
+function formatStorageCap(usedBytes, totalBytes, unit) {
+  var isGb = String(unit || "gib").toLowerCase() === "gb"
+  var uVal = formatGib(isGb ? gbFromBytes(usedBytes) : gibFromBytes(usedBytes))
+  var tVal = formatGib(isGb ? gbFromBytes(totalBytes) : gibFromBytes(totalBytes))
+  var suffix = isGb ? "GB" : "GiB"
+  return uVal + suffix + " / " + tVal + suffix
 }
 
 // One decimal below 10 GiB, none above: "9.4G" and "62G" both stay narrow,

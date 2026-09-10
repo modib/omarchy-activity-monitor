@@ -31,6 +31,7 @@ KeyboardPanel {
   property bool showDisk: false
   property string ramFormat: "used/total"
   property string diskFormat: "percent"
+  property string diskUnit: "gib"
   property string tempFormat: "degree-unit"
   property bool showGauges: true
   property bool showValues: false
@@ -561,6 +562,38 @@ Text {
               }
             }
 
+            // Disk Unit
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Unit"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "GiB (1024)"
+                  selected: root.diskUnit === "gib"
+                  onPicked: root.persistSetting("diskUnit", "gib")
+                }
+                ModeChip {
+                  label: "GB (1000)"
+                  selected: root.diskUnit === "gb"
+                  onPicked: root.persistSetting("diskUnit", "gb")
+                }
+              }
+            }
+
             // Temperature Unit
             Row {
               width: parent.width
@@ -851,7 +884,7 @@ Text {
                     anchors.verticalCenter: parent.verticalCenter
                     textFormat: Text.PlainText
                     text: rootMeter.rootMount
-                      ? (Model.formatGib(Model.gibFromBytes(rootMeter.rootMount.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(rootMeter.rootMount.totalBytes)) + " GiB")
+                      ? Model.formatStorageCap(rootMeter.rootMount.usedBytes, rootMeter.rootMount.totalBytes, root.diskUnit)
                       : "–"
                     color: root.warm(root.baseColor, Model.severity(rootMeter.pct, root.warnPercent, root.criticalPercent))
                     font.family: root.fontFamily
@@ -915,7 +948,7 @@ Text {
                       anchors.right: parent.right
                       anchors.verticalCenter: parent.verticalCenter
                       textFormat: Text.PlainText
-                      text: Model.formatGib(Model.gibFromBytes(modelData.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(modelData.totalBytes)) + " GiB"
+                      text: Model.formatStorageCap(modelData.usedBytes, modelData.totalBytes, root.diskUnit)
                       color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption

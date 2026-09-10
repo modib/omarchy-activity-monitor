@@ -32,6 +32,7 @@
       "showFan": true,
       "showDisk": false,
       "diskFormat": "percent",
+      "diskUnit": "gib",
       "diskMount": "/",
       "diskIcon": "󰋊",
       "diskIconRotation": 0,
@@ -159,6 +160,17 @@
         "label": "Monitored mount point",
         "defaultValue": "/",
         "description": "The filesystem mount point to monitor and display in the bar (default: '/')."
+      },
+      {
+        "key": "diskUnit",
+        "type": "enum",
+        "label": "Disk capacity unit",
+        "options": [
+          "gib",
+          "gb"
+        ],
+        "defaultValue": "gib",
+        "description": "'gib' for binary Gibibytes (1024^3) or 'gb' for decimal Gigabytes (1000^3)."
       },
       {
         "key": "tempFormat",

@@ -93,6 +93,10 @@ Panel {
   }
 
   readonly property string diskMount: String(setting("diskMount", "/"))
+  readonly property string diskUnit: {
+    var want = String(setting("diskUnit", "gib")).trim().toLowerCase()
+    return ["gib", "gb"].indexOf(want) === -1 ? "gib" : want
+  }
 
   readonly property string tempFormat: {
     var want = String(setting("tempFormat", "degree-unit")).trim().toLowerCase()
@@ -277,28 +281,30 @@ Panel {
     }
     if (!selectedMount) return "–"
 
-    var usedGib = Model.gibFromBytes(selectedMount.usedBytes)
-    var totalGib = Model.gibFromBytes(selectedMount.totalBytes)
-    var availGib = Model.gibFromBytes(selectedMount.availBytes)
+    var isGb = diskUnit === "gb"
+    var usedNum = isGb ? Model.gbFromBytes(selectedMount.usedBytes) : Model.gibFromBytes(selectedMount.usedBytes)
+    var totalNum = isGb ? Model.gbFromBytes(selectedMount.totalBytes) : Model.gibFromBytes(selectedMount.totalBytes)
+    var availNum = isGb ? Model.gbFromBytes(selectedMount.availBytes) : Model.gibFromBytes(selectedMount.availBytes)
+    var uSuffix = isGb ? "GB" : "GiB"
 
     if (diskFormat === "used") {
-      return Model.formatGibPrecise(usedGib) + "G"
+      return Model.formatGibPrecise(usedNum) + uSuffix
     }
 
     if (diskFormat === "free" || diskFormat === "available") {
-      return Model.formatGibPrecise(availGib) + "G"
+      return Model.formatGibPrecise(availNum) + uSuffix
     }
 
     if (labelled) {
-      return Model.formatGibPrecise(usedGib) + "/" + Model.formatGib(totalGib) + "G"
+      return Model.formatGibPrecise(usedNum) + uSuffix + "/" + Model.formatGib(totalNum) + uSuffix
     }
 
     if (mode === "icons") {
-      return Model.formatGib(usedGib) + "/" + Model.formatGib(totalGib) + "G"
+      return Model.formatGib(usedNum) + uSuffix + "/" + Model.formatGib(totalNum) + uSuffix
     }
 
-    var used = Model.formatGib(usedGib)
-    var total = Model.formatGib(totalGib)
+    var used = Model.formatGib(usedNum) + uSuffix
+    var total = Model.formatGib(totalNum) + uSuffix
     return Model.padLeft(used, 3) + "/" + total
   }
 
@@ -515,10 +521,12 @@ Panel {
     if (hw.diskInfo && hw.diskInfo.root) {
       lines.push("")
       var rootDisk = hw.diskInfo.root
-      var rootUsedGib = Model.gibFromBytes(rootDisk.usedBytes)
-      var rootTotalGib = Model.gibFromBytes(rootDisk.totalBytes)
-      lines.push("Disk " + Model.formatGib(rootUsedGib) + " / "
-                 + Model.formatGib(rootTotalGib) + " GiB  ·  "
+      var isGb = diskUnit === "gb"
+      var rootUsed = isGb ? Model.gbFromBytes(rootDisk.usedBytes) : Model.gibFromBytes(rootDisk.usedBytes)
+      var rootTotal = isGb ? Model.gbFromBytes(rootDisk.totalBytes) : Model.gibFromBytes(rootDisk.totalBytes)
+      var uSuffix = isGb ? "GB" : "GiB"
+      lines.push("Disk " + Model.formatGib(rootUsed) + uSuffix + " / "
+                 + Model.formatGib(rootTotal) + uSuffix + "  ·  "
                  + Model.formatPercent(rootDisk.percent))
       if (hw.diskReadBytesSec > 0 || hw.diskWriteBytesSec > 0) {
         lines.push("I/O  ▲ " + Model.formatBytesRate(hw.diskReadBytesSec) + "  ▼ " + Model.formatBytesRate(hw.diskWriteBytesSec))
@@ -604,6 +612,7 @@ Panel {
     function toggleFahrenheit(): void { root.toggleFahrenheit() }
     function refresh(): void { root.broadcast("refresh") }
     function cycleMode(): void { root.cycleMode() }
+    function toggleDiskUnit(): void { root.persistSetting("diskUnit", root.diskUnit === "gib" ? "gb" : "gib") }
     function status(): string { return root.detail() }
   }
 
@@ -686,6 +695,7 @@ Panel {
     showDisk: root.showDisk
     ramFormat: root.ramFormat
     diskFormat: root.diskFormat
+    diskUnit: root.diskUnit
     tempFormat: root.tempFormat
     showGauges: root.showGauges
     showValues: root.showValues

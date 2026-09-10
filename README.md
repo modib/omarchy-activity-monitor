@@ -192,6 +192,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `showDisk` | bool | `false` | Show disk storage usage in the bar. |
 | `ramFormat` | string | `"used/total"` | `"used/total"`, `"used"`, `"percent"`, `"free"`, or `"available"`. |
 | `diskFormat` | string | `"percent"` | `"percent"`, `"used/total"`, `"used"`, `"free"`, or `"available"`. |
+| `diskUnit` | string | `"gib"` | `"gib"` for binary (1024³), `"gb"` for decimal (1000³). |
 | `diskMount` | string | `"/"` | Filesystem mount point monitored and drawn in the bar. |
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"`, `"degree"`, `"unit"`, `"unit-lower"`, or `"bare"`. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
