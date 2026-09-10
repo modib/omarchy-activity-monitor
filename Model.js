@@ -200,6 +200,37 @@ function parseNvidia(raw) {
 
 // --------------------------------------------------------------------- disk
 
+// Clean human-readable label for storage partitions
+function formatDiskLabel(target, source) {
+  if (!target || target === "/") return "Linux ( / )"
+  if (target === "/boot" || target === "/boot/efi") return "Boot ( /boot )"
+  if (target === "/home") return "Home ( /home )"
+
+  // External drives or removable media mounted under /run/media/ or /media/
+  if (target.indexOf("/run/media/") === 0 || target.indexOf("/media/") === 0) {
+    var subParts = target.split("/").filter(Boolean)
+    var last = subParts.length > 0 ? subParts[subParts.length - 1] : ""
+    var dev = String(source || "").replace(/^\/dev\//, "")
+
+    // Check if label is a raw UUID / hex hash (e.g. 5C60C4CD60C4AED8 or GUID)
+    var isUuid = /^[0-9A-Fa-f]{8,}$|^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$|^[0-9a-fA-F\-]{32,}$/.test(last)
+    if (isUuid && dev) {
+      return dev + " (Drive)"
+    }
+    if (last) {
+      return last
+    }
+    if (dev) return dev
+  }
+
+  // Concise mount targets
+  if (target.length <= 15) return target
+
+  var devName = String(source || "").replace(/^\/dev\//, "")
+  if (devName) return devName
+  return target
+}
+
 // Parse df output with fixed columns: size, used, avail, pcent, target, source
 function parseDiskUsage(raw) {
   var text = String(raw || "").trim()
@@ -221,8 +252,9 @@ function parseDiskUsage(raw) {
     var used = toNumber(parts[1])
     var avail = toNumber(parts[2])
     var pcent = toNumber(parts[3].replace("%", ""))
-    var target = parts[4]
-    var source = parts.length > 5 ? parts[parts.length - 1] : target
+    var source = parts.length > 5 ? parts[parts.length - 1] : parts[4]
+    var target = parts.length > 5 ? parts.slice(4, parts.length - 1).join(" ") : parts[4]
+    if (!target) target = parts[4]
 
     if (size <= 0) continue
     // Skip virtual or image mounts that do not originate from /dev/
@@ -231,6 +263,7 @@ function parseDiskUsage(raw) {
     var entry = {
       target: target,
       source: source,
+      label: formatDiskLabel(target, source),
       totalBytes: size,
       usedBytes: used,
       availBytes: avail,

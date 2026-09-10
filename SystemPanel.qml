@@ -734,12 +734,17 @@ Text {
         }
 
         Row {
+          id: diskRow
           width: parent.width
           spacing: Style.space(12)
 
+          readonly property real matchedHeight: Math.max(diskIoGraph.implicitHeight, storageCard.implicitHeight)
+
           HistoryGraph {
+            id: diskIoGraph
             title: "Disk I/O"
             userWidth: (parent.width - parent.spacing) / 2
+            userHeight: diskRow.matchedHeight
             seriesValues: hw.diskHistory
             seriesSpec: [
               { key: "read",  label: "read",  color: Color.accent },
@@ -753,7 +758,9 @@ Text {
 
           // Storage Capacity Card
           Rectangle {
+            id: storageCard
             width: (parent.width - parent.spacing) / 2
+            height: diskRow.matchedHeight
             implicitHeight: storageCol.implicitHeight + Style.space(24)
             color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
             border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
@@ -762,16 +769,21 @@ Text {
 
             Column {
               id: storageCol
-              anchors.fill: parent
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.top: parent.top
               anchors.margins: Style.space(12)
-              spacing: Style.space(8)
+              spacing: Style.space(6)
 
-              Row {
+              Item {
                 width: parent.width
+                height: Math.max(storageHdrLeft.implicitHeight, storageHdrText.implicitHeight)
 
                 Row {
-                  spacing: Style.space(6)
+                  id: storageHdrLeft
+                  anchors.left: parent.left
                   anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(6)
 
                   Text {
                     textFormat: Text.PlainText
@@ -780,7 +792,6 @@ Text {
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
-                    anchors.verticalCenter: parent.verticalCenter
                   }
 
                   Text {
@@ -790,135 +801,150 @@ Text {
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
-                    anchors.verticalCenter: parent.verticalCenter
                   }
-                }
-
-                Item {
-                  width: Math.max(0, parent.width - storageHdrText.implicitWidth - Style.space(60))
-                  height: 1
                 }
 
                 Text {
                   id: storageHdrText
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
                   textFormat: Text.PlainText
-                  property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
+                  readonly property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
                   text: rootMount ? (Math.round(rootMount.percent) + "%") : "–"
                   color: rootMount ? root.warm(root.baseColor, Model.severity(rootMount.percent, root.warnPercent, root.criticalPercent)) : root.dimColor
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
                   font.bold: true
-                  anchors.verticalCenter: parent.verticalCenter
                 }
               }
 
               // Root partition meter
               Column {
+                id: rootMeter
                 width: parent.width
-                spacing: Style.space(4)
-                property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
+                spacing: Style.space(3)
+                readonly property var rootMount: hw.diskInfo && hw.diskInfo.root ? hw.diskInfo.root : null
                 readonly property real pct: rootMount ? rootMount.percent : 0
 
-                Row {
+                Item {
                   width: parent.width
+                  height: Math.max(diskRootLabel.implicitHeight, rootCapVal.implicitHeight)
 
                   Text {
+                    id: diskRootLabel
+                    anchors.left: parent.left
+                    anchors.right: rootCapVal.left
+                    anchors.rightMargin: Style.space(8)
+                    anchors.verticalCenter: parent.verticalCenter
                     textFormat: Text.PlainText
-                    text: "Root ( / )"
-                    color: Qt.darker(root.baseColor, 1.4)
+                    text: rootMeter.rootMount ? (rootMeter.rootMount.label || Model.formatDiskLabel(rootMeter.rootMount.target, rootMeter.rootMount.source)) : "Linux ( / )"
+                    color: Qt.darker(root.baseColor, 1.3)
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
                     font.bold: true
-                  }
-
-                  Item {
-                    width: Math.max(0, parent.width - Style.space(80) - rootCapVal.implicitWidth)
-                    height: 1
+                    elide: Text.ElideRight
                   }
 
                   Text {
                     id: rootCapVal
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                     textFormat: Text.PlainText
-                    text: rootMount ? (Model.formatGib(Model.gibFromBytes(rootMount.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(rootMount.totalBytes)) + " GiB") : "–"
-                    color: root.warm(root.baseColor, Model.severity(pct, root.warnPercent, root.criticalPercent))
+                    text: rootMeter.rootMount
+                      ? (Model.formatGib(Model.gibFromBytes(rootMeter.rootMount.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(rootMeter.rootMount.totalBytes)) + " GiB")
+                      : "–"
+                    color: root.warm(root.baseColor, Model.severity(rootMeter.pct, root.warnPercent, root.criticalPercent))
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
+                    font.bold: true
                   }
                 }
 
                 Rectangle {
+                  id: rootBarTrack
                   width: parent.width
-                  height: Style.space(6)
+                  height: Style.space(5)
                   radius: height / 2
                   color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.bottom: parent.bottom
-                  width: Math.max(height, parent.width * Math.min(100, Math.max(0, pct)) / 100)
-                  radius: height / 2
-                  color: root.warm(root.baseColor, Model.severity(pct, root.warnPercent, root.criticalPercent))
-                }
-              }
-            }
-
-            // Other mounted filesystems (if any)
-            Repeater {
-              model: hw.diskInfo && hw.diskInfo.mounts ? hw.diskInfo.mounts.filter(function(m) { return m.target !== "/" }) : []
-              delegate: Column {
-                required property var modelData
-                width: parent.width
-                spacing: Style.space(2)
-
-                Row {
-                  width: parent.width
-
-                  Text {
-                    textFormat: Text.PlainText
-                    text: modelData.target
-                    color: Qt.darker(root.baseColor, 1.5)
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideMiddle
-                    width: Math.min(implicitWidth, Style.space(90))
-                  }
-
-                  Item {
-                    width: Math.max(0, parent.width - Style.space(90) - secCapVal.implicitWidth)
-                    height: 1
-                  }
-
-                  Text {
-                    id: secCapVal
-                    textFormat: Text.PlainText
-                    text: Model.formatGib(Model.gibFromBytes(modelData.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(modelData.totalBytes)) + " GiB"
-                    color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                  }
-                }
-
-                Rectangle {
-                  width: parent.width
-                  height: Style.space(4)
-                  radius: height / 2
-                  color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
 
                   Rectangle {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
-                    width: Math.max(height, parent.width * Math.min(100, Math.max(0, modelData.percent)) / 100)
+                    width: rootMeter.rootMount && rootMeter.pct > 0
+                      ? Math.max(height, parent.width * Math.min(100, Math.max(0, rootMeter.pct)) / 100)
+                      : 0
                     radius: height / 2
-                    color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
+                    color: root.warm(root.baseColor, Model.severity(rootMeter.pct, root.warnPercent, root.criticalPercent))
+                    visible: rootMeter.rootMount !== null && rootMeter.pct > 0
+                  }
+                }
+              }
+
+              // Other mounted filesystems (if any)
+              Repeater {
+                model: hw.diskInfo && hw.diskInfo.mounts
+                  ? hw.diskInfo.mounts.filter(function(m) { return m.target !== "/" }).slice(0, 4)
+                  : []
+                delegate: Column {
+                  id: secMeter
+                  required property var modelData
+                  width: parent.width
+                  spacing: Style.space(2)
+
+                  Item {
+                    width: parent.width
+                    height: Math.max(secLabel.implicitHeight, secCapVal.implicitHeight)
+
+                    Text {
+                      id: secLabel
+                      anchors.left: parent.left
+                      anchors.right: secCapVal.left
+                      anchors.rightMargin: Style.space(8)
+                      anchors.verticalCenter: parent.verticalCenter
+                      textFormat: Text.PlainText
+                      text: modelData.label || Model.formatDiskLabel(modelData.target, modelData.source)
+                      color: Qt.darker(root.baseColor, 1.5)
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+
+                    Text {
+                      id: secCapVal
+                      anchors.right: parent.right
+                      anchors.verticalCenter: parent.verticalCenter
+                      textFormat: Text.PlainText
+                      text: Model.formatGib(Model.gibFromBytes(modelData.usedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(modelData.totalBytes)) + " GiB"
+                      color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                    }
+                  }
+
+                  Rectangle {
+                    width: parent.width
+                    height: Style.space(4)
+                    radius: height / 2
+                    color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+
+                    Rectangle {
+                      anchors.left: parent.left
+                      anchors.top: parent.top
+                      anchors.bottom: parent.bottom
+                      width: modelData.percent > 0
+                        ? Math.max(height, parent.width * Math.min(100, Math.max(0, modelData.percent)) / 100)
+                        : 0
+                      radius: height / 2
+                      color: root.warm(root.baseColor, Model.severity(modelData.percent, root.warnPercent, root.criticalPercent))
+                      visible: modelData.percent > 0
+                    }
                   }
                 }
               }
             }
           }
         }
-      }
 
       // Graphics Telemetry Section (if GPU present)
         Rectangle {
@@ -1233,12 +1259,14 @@ Text {
     property color currentColor: Color.accent
     // Explicit width given by a grid cell; -1 keeps the old full-width look.
     property real userWidth: -1
+    property real userHeight: -1
     property string placeholder: "collecting samples…"
 
     readonly property bool stacked: graph.seriesValues !== null && graph.seriesValues !== undefined
       && graph.seriesSpec !== null && graph.seriesSpec !== undefined && graph.seriesSpec.length > 0
 
     width: graph.userWidth >= 0 ? graph.userWidth : parent.width
+    height: graph.userHeight >= 0 ? graph.userHeight : implicitHeight
     implicitHeight: graphCol.implicitHeight + Style.space(24)
     color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
     border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
@@ -1252,6 +1280,7 @@ Text {
       spacing: Style.space(8)
 
       Row {
+        id: hgTitleRow
         width: parent.width
 
         Text {
@@ -1283,6 +1312,7 @@ Text {
       // Series legend — only the stacked load cards (CPU, memory) carry one;
       // temperature and fan are single-tone so a legend would be noise.
       Row {
+        id: hgLegendRow
         visible: graph.stacked
         spacing: Style.space(10)
 
@@ -1313,7 +1343,10 @@ Text {
       Item {
         id: graphArea
         width: parent.width
-        height: Style.space(55)
+        implicitHeight: Style.space(55)
+        height: graph.userHeight >= 0
+          ? Math.max(Style.space(55), graphCol.height - hgTitleRow.implicitHeight - (hgLegendRow.visible ? (hgLegendRow.implicitHeight + graphCol.spacing) : 0) - graphCol.spacing)
+          : Style.space(55)
 
         readonly property int cols: graph.stacked
           ? (graph.seriesValues ? graph.seriesValues.length : 0)
