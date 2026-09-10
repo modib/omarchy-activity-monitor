@@ -159,7 +159,9 @@ Item {
     root.tempHistory = t
 
     var f = root.fanHistory.slice()
-    if (isFinite(fanRpm) && fanRpm > 0) {
+    // >= 0 so a stopped-but-readable fan (0 rpm, rendered "idle") still
+    // graphs as a flat baseline; -1 (no sensor) is never pushed.
+    if (isFinite(fanRpm) && fanRpm >= 0) {
       f.push(Model.clamp(fanRpm / 6000 * 100, 0, 100))
       if (f.length > cap) f.shift()
     }
@@ -238,8 +240,10 @@ Item {
 
   function sampleNvidia() {
     if (nvidiaProcess.running) return
+    // fan.speed is deliberately not queried: nvidia-smi reports it as a
+    // percent, not RPM, so it cannot feed the RPM graphs or thresholds.
     nvidiaProcess.command = ["nvidia-smi",
-                             "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw",
+                             "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,clocks.current.graphics",
                              "--format=csv,noheader,nounits",
                              "--id=" + String(gpuInfo.index !== undefined ? gpuInfo.index : 0)]
     nvidiaProcess.running = true
@@ -253,6 +257,7 @@ Item {
     gpuWatts = sample.watts
     gpuVramUsedBytes = sample.vramUsedBytes
     gpuVramTotalBytes = sample.vramTotalBytes
+    gpuMhz = sample.mhz
   }
 
   // ----------------------------------------------------------------- files
@@ -363,9 +368,9 @@ Item {
     stderr: StdioCollector { waitForEnd: true }
   }
 
-  // An optimizer action, requested from the panel only after an explicit
-  // confirmation. Committed to the same shell's PATH, so the process is
-  // allowed to die if that is what it owns.
+  // A confirmed destructive action, requested from the panel only after an
+  // explicit in-panel Yes. The panel gates it to processes owned by the
+  // desktop user and refuses pid <= 1 here as a second line of defence.
   Process {
     id: killProc
     stdout: StdioCollector { waitForEnd: true }
@@ -374,6 +379,8 @@ Item {
 
   function refreshProcesses() {
     if (!active || procProbe.running) return
+    // No HW_TOP_N override: the probe over-fetches 15 rows and the panel caps
+    // to topProcessCount (max 5), so lowering the cap costs nothing.
     procProbe.command = [root.procProbePath]
     procProbe.running = true
   }

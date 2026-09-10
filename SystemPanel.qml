@@ -18,6 +18,8 @@ KeyboardPanel {
   property int criticalPercent: 90
   property int warnTempC: 75
   property int criticalTempC: 90
+  property int warnFanRpm: 3500
+  property int criticalFanRpm: 5000
 
   property string mode: "icons"
   property bool showGpu: true
@@ -28,12 +30,14 @@ KeyboardPanel {
   property bool showFan: true
   property string ramFormat: "used/total"
   property string tempFormat: "degree-unit"
+  property bool showGauges: true
+  property bool showValues: false
   property bool settingsOpen: false
 
   // Process list state. Two fixed lists (Heaviest CPU, Heaviest Memory) each
-  // capped at a handful of rows; pending* is the one-shot confirm state for a
-  // kill offered on any row.
-  property int topProcessCount: 15
+  // capped at sectionRows (max 5); pending* is the one-shot confirm state for
+  // a kill offered on a user-owned row only.
+  property int topProcessCount: 5
   property int cpuThresholdPct: 10
   property int memThresholdMib: 0
   property int pendingPid: 0
@@ -133,12 +137,17 @@ KeyboardPanel {
 
   function tempColor(tempC) {
     if (!isFinite(tempC) || tempC <= 0) return dimColor
-    if (tempC < 50) return dimColor
-    var t = Math.min(1, Math.max(0, (tempC - 50) / Math.max(1, criticalTempC - 50)))
+    if (tempC <= warnTempC) return dimColor
+    var t = Math.min(1, Math.max(0, (tempC - warnTempC) / Math.max(1, criticalTempC - warnTempC)))
     return Qt.rgba(baseColor.r + (hotColor.r - baseColor.r) * t,
                    baseColor.g + (hotColor.g - baseColor.g) * t,
                    baseColor.b + (hotColor.b - baseColor.b) * t,
                    baseColor.a)
+  }
+
+  function fanSeverity(rpm) {
+    if (!isFinite(rpm) || rpm < 0) return 0
+    return Math.min(1, Math.max(0, (rpm - warnFanRpm) / Math.max(1, criticalFanRpm - warnFanRpm)))
   }
 
   onOpenChanged: {
@@ -147,7 +156,7 @@ KeyboardPanel {
       hw.refreshProcesses()
     } else {
       root.settingsOpen = false
-      root.pendingPid = 0
+      root.cancelAction()
     }
   }
 
@@ -159,16 +168,18 @@ KeyboardPanel {
     id: keyCatcher
     anchors.fill: parent
     onCloseRequested: root.close()
-    // root.owner is the Panel widget root (Widget.qml sets owner: root),
-    // which is what Bar.switchPanelFrom expects.
+    // root.owner is the Panel widget root (Widget.qml sets owner: root).
+    // Tab cycles the bar readout mode (the shell has no panel-switching API
+    // on the owner); R resamples sensors and processes; C/F toggle units.
     onTabRequested: function(direction) {
-      if (root.owner && typeof root.owner.switchPanel === "function") {
-        root.owner.switchPanel(direction)
+      if (root.owner && typeof root.owner.cycleMode === "function") {
+        root.owner.cycleMode()
       }
     }
     onTextKey: function(t) {
       if (t === "r" || t === "R") {
         hw.sample()
+        hw.refreshProcesses()
       } else if (t === "c" || t === "C" || t === "f" || t === "F") {
         root.toggleFahrenheit()
       } else if (t === "s" || t === "S") {
@@ -190,7 +201,7 @@ KeyboardPanel {
       interval: 6000
       repeat: false
       running: root.pendingPid > 0
-      onTriggered: root.pendingPid = 0
+      onTriggered: root.cancelAction()
     }
 
     Controls.ScrollView {
@@ -270,10 +281,12 @@ Text {
           // Gear Icon for In-Panel Settings — a bare glyph pinned to the header's
           // top-right corner, aligned with the "Activity Monitor" title line,
           // and a persistent foreground white like the rest of the panel text.
+          // The hitbox is a touch-sized square around the glyph so it stays
+          // tappable even though the visible mark is small.
           Item {
             id: settingsButton
-            implicitWidth: settingsGlyph.implicitWidth
-            implicitHeight: settingsGlyph.implicitHeight
+            implicitWidth: Math.max(settingsGlyph.implicitWidth, Style.space(28))
+            implicitHeight: Math.max(settingsGlyph.implicitHeight, Style.space(28))
             anchors.right: parent.right
             anchors.verticalCenter: headerTitle.verticalCenter
 
@@ -481,6 +494,11 @@ Text {
                   selected: root.ramFormat === "free"
                   onPicked: root.persistSetting("ramFormat", "free")
                 }
+                ModeChip {
+                  label: "Available"
+                  selected: root.ramFormat === "available"
+                  onPicked: root.persistSetting("ramFormat", "available")
+                }
               }
             }
 
@@ -551,9 +569,48 @@ Text {
                   onPicked: root.persistSetting("tempFormat", "unit")
                 }
                 ModeChip {
+                  label: root.fahrenheit ? "45f" : "45c"
+                  selected: root.tempFormat === "unit-lower"
+                  onPicked: root.persistSetting("tempFormat", "unit-lower")
+                }
+                ModeChip {
                   label: "45"
                   selected: root.tempFormat === "bare"
                   onPicked: root.persistSetting("tempFormat", "bare")
+                }
+              }
+            }
+
+            // Bar gauges — compact and full mode extras. Icons mode shows
+            // figures instead, labels mode never draws gauges; the toggles
+            // still persist for when the mode changes back.
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Bars"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "Gauges"
+                  selected: root.showGauges
+                  onPicked: root.persistSetting("showGauges", !root.showGauges)
+                }
+                ModeChip {
+                  label: "Figures"
+                  selected: root.showValues
+                  onPicked: root.persistSetting("showValues", !root.showValues)
                 }
               }
             }
@@ -612,8 +669,8 @@ Text {
             userWidth: (parent.width - parent.spacing) / 2
             values: hw.fanHistory
             placeholder: hw.hasFanSensor ? "collecting samples…" : "no fan sensor"
-            currentText: hw.fanRpm > 0 ? Model.formatRpm(hw.fanRpm) : "–"
-            currentColor: root.warm(root.baseColor, hw.hasFan ? 0.5 : 0)
+            currentText: hw.fanRpm >= 0 ? Model.formatRpm(hw.fanRpm) : "–"
+            currentColor: root.warm(root.baseColor, root.fanSeverity(hw.fanRpm))
           }
         }
 
@@ -741,8 +798,8 @@ Text {
         }
 
         // Two short process lists — Heaviest CPU, Heaviest Memory — are the
-        // reason the panel exists. Every row offers consent-confirmed
-        // Quit / Force actions.
+        // reason the panel exists. Only rows owned by the desktop user offer
+        // consent-confirmed Quit / Force actions; OS rows carry a system tag.
         Text {
           textFormat: Text.PlainText
           width: parent.width
@@ -822,8 +879,9 @@ Text {
     }
   }
 
-  // A titled, capped process list. Every row offers consent-confirmed Quit and
-  // Force actions; the scope only changes which metric is highlighted.
+  // A titled, capped process list. Only user-owned rows offer
+  // consent-confirmed Quit and Force actions; OS rows show a system tag.
+  // The scope only changes which metric is highlighted.
   component ProcessSection: Rectangle {
     id: section
     property string title: ""
@@ -1124,6 +1182,10 @@ Text {
     signal confirmed()
     signal cancelled()
 
+    // Touch/keyboard path to the kill chips: tapping a user-owned row pins
+    // its Quit / Force pair open, since hover alone never fires on touch.
+    property bool pinned: false
+
     // Fixed width of the trailing action column (chips or the pending Yes/No).
     // A named constant keeps the elided args binding honest: the old
     // `parent.children[3].width` form resolved to zero because it evaluated
@@ -1134,9 +1196,10 @@ Text {
     implicitWidth: parent.width
     height: prowRow.implicitHeight + Style.space(8)
     radius: Style.cornerRadius
-    // The row background is the system/user marker: user-owned rows stay
-    // neutral (brightening on hover), OS rows keep a constant faint tint and
-    // never gain kill chips, so no extra "system" tag is needed.
+    // The row background plus the action column mark ownership: user-owned
+    // rows stay neutral (brightening on hover) and reveal kill chips;
+    // OS rows keep a constant faint tint, never gain chips, and carry a
+    // dim "system" tag instead.
     color: prowMouse.containsMouse
       ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.06)
       : (prow.isUser ? "transparent" : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04))
@@ -1146,7 +1209,10 @@ Text {
       id: prowMouse
       anchors.fill: parent
       hoverEnabled: true
-      acceptedButtons: Qt.NoButton
+      acceptedButtons: Qt.LeftButton
+      onClicked: {
+        if (prow.isUser && !prow.pending) prow.pinned = !prow.pinned
+      }
     }
 
     Row {
@@ -1206,14 +1272,25 @@ Text {
         width: prow.actionsWidth
         implicitHeight: Style.space(22)
 
+        Text {
+          textFormat: Text.PlainText
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          visible: !prow.isUser && !prow.pending
+          text: "system"
+          color: Qt.darker(prow.baseColor, 1.5)
+          font.family: prow.fontFamily
+          font.pixelSize: Style.font.caption
+        }
+
         Row {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(4)
-          // Only user-owned rows get kills, and only while the pointer rests
-          // on the row — quiet rows stay clean and the panel only flashes
-          // controls where you are actually looking.
-          visible: prow.isUser && !prow.pending && prowMouse.containsMouse
+          // Only user-owned rows get kills, while the pointer rests on the
+          // row or a tap pins them open — quiet rows stay clean and the
+          // panel only flashes controls where you are actually looking.
+          visible: prow.isUser && !prow.pending && (prowMouse.containsMouse || prow.pinned)
 
           ModeChip {
             label: "Quit"

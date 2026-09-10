@@ -14,14 +14,20 @@ an explicit consent prompt.
 ## Features
 
 - **Bar readout** — four display modes (`icons`, `compact`, `full`, `labels`),
-  right-click to cycle, with figures that warm toward the theme's urgent colour
-  as load and temperature climb.
+  right-click (or `Tab` in the panel) to cycle, with figures that warm toward
+  the theme's urgent colour as load and temperature climb. `icons` is glyph +
+  figure per item; `compact` is glyph + gauge (temperatures omitted);
+  `full` adds inline temperatures; `labels` spells the readout out as words.
+  On a vertical bar, temperatures and figures are omitted.
 - **Persistent thermals** — CPU temperature and fan RPM stay in the bar whenever
-  a reading exists, so nothing important is hidden behind a click.
+  a reading exists (every mode except `compact`), so nothing important is
+  hidden behind a click.
 - **Live history graphs** — a 2x2 grid of rolling 60-second windows: CPU and
   memory load on the first line, temperature and fan speed on the second, all
-  drawn as the same square-pixel columns. All four cards sample on the same
-  once-a-second cadence. CPU tints each column by **user / system / iowait**
+  drawn as the same square-pixel columns. Sensor files are re-read every
+  `refreshIntervalSec` (default 2s); a 1-second pusher duplicates the latest
+  reading between ticks so all four cards draw at the same 60-column cadence.
+  CPU tints each column by **user / system / iowait**
   and memory by **apps / cache / buffers**, each stack labelled with a small
   legend row; temperature and fan are single-tone so they carry none. Buffered
   continuously in the background, so the panel opens already populated.
@@ -37,9 +43,11 @@ an explicit consent prompt.
   tinted background and never carry actions; your own rows stay plain until you
   hover, when a subtle **Quit** (SIGTERM) / **Force** (SIGKILL) pair appears
   with a consent prompt. The panel re-surveys after an action.
-- **In-panel settings** — a drawer that lives in the panel: mode, which items
-  the bar shows, memory format, temperature unit and format. No config file
-  surfing.
+- **In-panel settings** — a drawer that lives in the panel: readout mode,
+  which components the bar shows, memory format, temperature unit and format,
+  and gauge/figure toggles for `compact`/`full`. Numeric floors and intervals
+  (`cpuThresholdPct`, `memThresholdMib`, `topProcessCount`,
+  `refreshIntervalSec`, warn/critical limits) stay config-file settings.
 - **No daemon, no privileges** — reads `/proc` and `/sys`, uses system sensors,
   and never polls in a way that would stall the shell.
 
@@ -73,16 +81,18 @@ The panel is keyboard-driven and anchored to the widget:
   opens the in-panel settings drawer (`s` also toggles it).
 - **History graphs** — CPU + Memory side by side on the first line,
   Temperature + Fan speed on the second, the last 60 seconds, all in matching
-  square-pixel columns on the same once-a-second cadence. CPU stacks
+  square-pixel columns at the same 60-column cadence (sensor files re-read
+  every `refreshIntervalSec`, duplicated each second between ticks). CPU stacks
   user/system/iowait and Memory apps/cache/buffers by tint, each with a legend
   row; temperature and fan stay single-tone.
 - **Graphics metrics** — card name, load, temperature, VRAM meter, power,
   fan, and core clock (only when a card is present).
 - **Heaviest CPU / Heaviest Memory** — capped lists of the moment's heaviest
-  consumers. OS rows are tinted read-only and can never be touched; hovering
-  your own rows reveals **Quit** / **Force**.
-- **Keyboard** — `Escape` closes, `Tab`/`Shift+Tab` switch panels, `r` resamples,
-  `c`/`f` toggle °C/°F.
+  consumers. OS rows are tinted read-only and carry a `system` tag; hovering
+  (or tapping) your own rows reveals **Quit** / **Force**.
+- **Keyboard** — `Escape` closes, `Tab` cycles the bar readout mode,
+  `r` resamples sensors and processes, `s` toggles settings, `c`/`f` toggle
+  °C/°F.
 
 ### The four bar readouts
 
@@ -90,10 +100,10 @@ The panel is keyboard-driven and anchored to the widget:
 default.
 
 ![compact](assets/preview-bar-compact.png) `compact` — glyph + vertical gauge,
-readable without reading a digit.
+readable without reading a digit. Temperatures are omitted in this mode.
 
-![full](assets/preview-bar-full.png) `full` — the same, plus CPU and GPU
-temperature.
+![full](assets/preview-bar-full.png) `full` — glyph + gauge, plus inline CPU
+and GPU temperature.
 
 ![labels](assets/preview-bar-labels.png) `labels` — each label welded to its
 figure.
@@ -172,36 +182,40 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. |
-| `itemsOrder` | array/string | `"gpu,cpu,ram,cpu-temp,fan"` | Sequence of telemetry items in the top bar. |
+| `itemsOrder` | array/string | `"gpu,gpu-temp,cpu,ram,cpu-temp,fan"` | Sequence of telemetry items in the top bar. Missing/disabled items are skipped. |
 | `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card exists). |
 | `showCpu` | bool | `true` | Show CPU load. |
-| `showCpuTemp` | bool | `true` | Show the CPU temperature cell. |
-| `showGpuTemp` | bool | `false` | Show GPU temperature in the bar. |
+| `showCpuTemp` | bool | `true` | Show the CPU temperature cell (`icons` mode; inline in `full`/`labels`). |
+| `showGpuTemp` | bool | `false` | Show GPU temperature in the bar (`icons` mode; inline in `full`/`labels`). |
 | `showRam` | bool | `true` | Show memory usage. |
-| `showFan` | bool | `true` | Show the fan RPM cell when a readable fan exists. |
+| `showFan` | bool | `true` | Show the fan RPM cell when a readable fan exists (every mode except `compact`). |
 | `ramFormat` | string | `"used/total"` | `"used/total"`, `"used"`, `"percent"`, `"free"`, or `"available"`. |
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"`, `"degree"`, `"unit"`, `"unit-lower"`, or `"bare"`. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
-| `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"`. |
-| `showGauges` | bool | `true` | Show vertical capsule gauges. |
+| `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"` (`"space"` is accepted as `"trail"`). |
+| `padOpacity` | float | `0.3` | Opacity of padding digits. Config-file only. |
+| `showGauges` | bool | `true` | Vertical capsule gauges in `compact`/`full` (`icons` only when explicitly enabled; never in `labels`). |
 | `showValues` | bool | `false` | Put figures beside gauges in `compact`/`full` modes. |
-| `gpuIcon` | string | `"󰾲"` | Glyph marking the GPU figure. |
-| `cpuIcon` | string | `""` | Glyph marking the CPU figure. |
-| `tempIcon` | string | `""` | Glyph marking the temperature figure. |
-| `gpuTempIcon` | string | `"󰔏"` | Glyph marking the GPU temperature figure. |
-| `ramIcon` | string | `""` | Glyph marking the memory figure. |
-| `fanIcon` | string | `"\uDB80\uDE10"` | Glyph marking the fan figure. |
+| `gpuIcon` | string | `""` | Glyph marking the GPU figure. |
+| `cpuIcon` | string | `""` | Glyph marking the CPU figure. |
+| `tempIcon` | string | `""` | Glyph marking the temperature figure. |
+| `gpuTempIcon` | string | `""` | Glyph marking the GPU temperature figure. |
+| `ramIcon` | string | `""` | Glyph marking the memory figure. |
+| `fanIcon` | string | `""` | Glyph marking the fan figure. |
+| `gpuIconRotation` / `cpuIconRotation` / `tempIconRotation` / `gpuTempIconRotation` / `ramIconRotation` / `fanIconRotation` | int | `0` | Glyph rotation in degrees (-360…360). Config-file only. |
 | `iconSize` | int | `0` | Glyph size in pixels; `0` follows the bar's icon font. |
-| `refreshIntervalSec` | int | `2` | Seconds between samples. |
+| `refreshIntervalSec` | int | `2` | Seconds between sensor file reads. |
 | `gpu` | string | `"auto"` | `"auto"`, a card index, or a name substring. |
 | `warnPercent` | int | `70` | Load where figures start warming. |
 | `criticalPercent` | int | `90` | Load where figures reach full urgent. |
-| `warnTempC` | int | `75` | Temperature (°C) where figures start warming. |
+| `warnTempC` | int | `75` | Temperature (°C) where figures start warming; below this the readout stays neutral. |
 | `criticalTempC` | int | `90` | Temperature (°C) at full urgent red. |
+| `warnFanRpm` | int | `3500` | Fan RPM where the fan figure starts warming. |
+| `criticalFanRpm` | int | `5000` | Fan RPM at full urgent red. |
 | `clickCommand` | string | `""` | Command for left click; empty opens the panel. |
-| `monitors` | array/string | `[]` | Connector names to draw on; empty draws on all. |
+| `monitors` | array/string | `""` | Connector names to draw on; empty draws on all. Unknown names hide the widget and log a warning. |
 | `processProbeIntervalSec` | int | `8` | Seconds between process surveys. |
-| `topProcessCount` | int | `5` | Max rows per list in the panel (capped at 5). |
+| `topProcessCount` | int | `5` | Max rows per list in the panel (1–5). |
 | `cpuThresholdPct` | int | `10` | CPU% floor for the Heaviest CPU list. |
 | `memThresholdMib` | int | `0` | Resident-size floor (MiB) for Heaviest Memory; `0` picks 10% of total RAM automatically. |
 
@@ -212,6 +226,8 @@ Methods are reachable through `omarchy-shell`:
 ```sh
 omarchy-shell modib.activity-monitor open       # open the panel
 omarchy-shell modib.activity-monitor close      # close the panel
+omarchy-shell modib.activity-monitor show       # open the panel
+omarchy-shell modib.activity-monitor hide       # close the panel
 omarchy-shell modib.activity-monitor toggle     # toggle the panel
 omarchy-shell modib.activity-monitor toggleFahrenheit
 omarchy-shell modib.activity-monitor cycleMode
@@ -223,7 +239,6 @@ omarchy-shell modib.activity-monitor status     # full telemetry breakdown
 
 - A Nerd Font for the glyphs (Omarchy ships one)
 - `bash` for the two probe scripts
-- `hyprctl` and `jq` for the GPU probe
 - `coreutils` (`kill`) for the consent-confirmed kill actions
 - `pciutils` (`lspci`) — optional, to name the GPU card in the panel
 - `nvidia-smi` — only for NVIDIA cards

@@ -69,11 +69,13 @@ Panel {
   readonly property bool showFan: boolSetting("showFan", true)
 
   readonly property var itemOrder: {
-    // CPU and RAM sit together; anything thermal or spinning goes on the right.
-    var raw = setting("itemsOrder", ["gpu", "cpu", "ram", "cpu-temp", "fan"])
+    // Load figures first; anything thermal or spinning goes on the right.
+    // Matches manifest defaults; items without a live cell are skipped.
+    var fallback = ["gpu", "gpu-temp", "cpu", "ram", "cpu-temp", "fan"]
+    var raw = setting("itemsOrder", fallback)
     if (raw instanceof Array) return raw.map(function(s) { return String(s).trim().toLowerCase() })
     var text = String(raw || "").trim().toLowerCase()
-    return text === "" ? ["gpu", "cpu", "ram", "cpu-temp", "fan"] : text.split(/[,\s]+/)
+    return text === "" ? fallback : text.split(/[,\s]+/)
   }
 
   // ------------------------------------------------------------ formatting
@@ -108,10 +110,13 @@ Panel {
   readonly property int criticalPercent: intSetting("criticalPercent", 90, 1, 100)
   readonly property int warnTempC: intSetting("warnTempC", 75, 1, 150)
   readonly property int criticalTempC: intSetting("criticalTempC", 90, 1, 150)
+  readonly property int warnFanRpm: intSetting("warnFanRpm", 3500, 0, 20000)
+  readonly property int criticalFanRpm: intSetting("criticalFanRpm", 5000, 0, 20000)
 
   // The popup's process lists: how many rows per list and how often Service
-  // re-runs the process survey script.
-  readonly property int topProcessCount: intSetting("topProcessCount", 5, 1, 20)
+  // re-runs the process survey script. Capped at 5 everywhere (manifest,
+  // panel, and here) so a larger value can never silently clamp.
+  readonly property int topProcessCount: intSetting("topProcessCount", 5, 1, 5)
   readonly property int cpuThresholdPct: intSetting("cpuThresholdPct", 10, 1, 400)
   readonly property int memThresholdMib: intSetting("memThresholdMib", 0, 0, 8192)
 
@@ -129,6 +134,7 @@ Panel {
   readonly property int gpuIconRotation: intSetting("gpuIconRotation", 0, -360, 360)
   readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
   readonly property int tempIconRotation: intSetting("tempIconRotation", 0, -360, 360)
+  readonly property int gpuTempIconRotation: intSetting("gpuTempIconRotation", 0, -360, 360)
   readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
   readonly property int fanIconRotation: intSetting("fanIconRotation", 0, -360, 360)
 
@@ -165,12 +171,17 @@ Panel {
 
   function tempColor(tempC) {
     if (!isFinite(tempC) || tempC <= 0) return dim
-    if (tempC < 50) return dim
-    var t = Math.min(1, Math.max(0, (tempC - 50) / Math.max(1, criticalTempC - 50)))
+    if (tempC <= warnTempC) return dim
+    var t = Math.min(1, Math.max(0, (tempC - warnTempC) / Math.max(1, criticalTempC - warnTempC)))
     return Qt.rgba(base.r + (hot.r - base.r) * t,
                    base.g + (hot.g - base.g) * t,
                    base.b + (hot.b - base.b) * t,
                    base.a)
+  }
+
+  function fanSeverity(rpm) {
+    if (!isFinite(rpm) || rpm < 0) return 0
+    return Math.min(1, Math.max(0, (rpm - warnFanRpm) / Math.max(1, criticalFanRpm - warnFanRpm)))
   }
 
   readonly property int percentSlot: Math.ceil(percentMetrics.advanceWidth)
@@ -263,7 +274,9 @@ Panel {
         temp: (mode === "full" || mode === "labels") && hw.gpuTempC > 0 ? tempText(hw.gpuTempC) : "",
         tempC: hw.gpuTempC,
         ratio: meterValue >= 0 ? meterValue / 100 : 0,
-        severity: Model.severity(busy, warnPercent, criticalPercent)
+        // Severity follows the same fallback figure the cell shows, so a card
+        // reporting via VRAM still warms up instead of staying cool.
+        severity: Model.severity(meterValue, warnPercent, criticalPercent)
       }
     }
 
@@ -286,6 +299,8 @@ Panel {
 
     // CPU Temperature (standalone cell used in 'icons' mode). Always present
     // when a heat reading exists, coloured by the same ramp as the GPU temp.
+    // In compact mode temperatures are omitted by design; full/labels embed
+    // the temperature inline in the CPU cell instead.
     if (showCpuTemp && hw.cpuTempC > 0 && showTemps && mode === "icons") {
       cellMap["cpu-temp"] = {
         key: "cpu-temp",
@@ -297,14 +312,15 @@ Panel {
         slotted: false,
         temp: "",
         tempC: hw.cpuTempC,
-        ratio: Math.min(1, Math.max(0, (hw.cpuTempC - 30) / Math.max(1, criticalTempC - 30))),
+        ratio: Math.min(1, Math.max(0, (hw.cpuTempC - warnTempC) / Math.max(1, criticalTempC - warnTempC))),
         severity: Math.min(1, Math.max(0, (hw.cpuTempC - warnTempC) / Math.max(1, criticalTempC - warnTempC)))
       }
     }
 
-    // System fan (standalone cell used in 'icons' mode), right of the CPU
-    // temperature. Shown whenever a fan reading exists and showFan is set.
-    if (root.showFan && hw.fanRpm >= 0 && showTemps && mode === "icons") {
+    // System fan, right of the CPU temperature. Shown in every mode except
+    // compact (which is glyphs + load gauges only) whenever a fan reading
+    // exists and showFan is set.
+    if (root.showFan && hw.fanRpm >= 0 && mode !== "compact") {
       cellMap["fan"] = {
         key: "fan",
         label: "FAN",
@@ -315,24 +331,25 @@ Panel {
         slotted: false,
         temp: "",
         tempC: -1,
-        ratio: Math.min(1, Math.max(0, (hw.fanRpm - 1000) / 4000)),
-        severity: Math.min(1, Math.max(0, (hw.fanRpm - 1000) / 4000))
+        ratio: root.fanSeverity(hw.fanRpm),
+        severity: root.fanSeverity(hw.fanRpm)
       }
     }
 
-    // GPU Temperature (standalone cell used in 'icons' mode)
+    // GPU Temperature (standalone cell used in 'icons' mode; full/labels embed
+    // it inline in the GPU cell instead, like the CPU temperature above)
     if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps && mode === "icons") {
       cellMap["gpu-temp"] = {
         key: "gpu-temp",
         label: "GPU°",
         icon: gpuTempIcon,
-        iconRotation: gpuIconRotation,
+        iconRotation: gpuTempIconRotation,
         value: tempText(hw.gpuTempC),
         pad: "",
         slotted: false,
         temp: "",
         tempC: hw.gpuTempC,
-        ratio: Math.min(1, Math.max(0, (hw.gpuTempC - 30) / Math.max(1, criticalTempC - 30))),
+        ratio: Math.min(1, Math.max(0, (hw.gpuTempC - warnTempC) / Math.max(1, criticalTempC - warnTempC))),
         severity: Model.severity(hw.gpuTempC, warnTempC, criticalTempC)
       }
     }
@@ -397,7 +414,7 @@ Panel {
     if (hw.cpuInfo && hw.cpuInfo.model) {
       lines.push(hw.cpuInfo.model + " · " + hw.cpuInfo.cores + "C/" + hw.cpuInfo.threads + "T")
     }
-    if (hw.load) {
+    if (hw.load && isFinite(hw.load.one) && isFinite(hw.load.five) && isFinite(hw.load.fifteen)) {
       lines.push("Load " + hw.load.one.toFixed(2) + "  " + hw.load.five.toFixed(2) + "  " + hw.load.fifteen.toFixed(2))
     }
     if (hw.fanRpm >= 0) lines.push("Fan  " + Model.formatRpm(hw.fanRpm))
@@ -407,7 +424,7 @@ Panel {
       var gpu = "GPU  " + Model.formatPercent(hw.gpuPercent)
       if (hw.gpuWatts >= 0) gpu += "  ·  " + Model.formatWatts(hw.gpuWatts)
       lines.push(gpu)
-      lines.push(String(hw.gpuInfo.name))
+      lines.push(hw.gpuInfo && hw.gpuInfo.name ? String(hw.gpuInfo.name) : "Graphics Adapter")
       if (hw.gpuVramTotalBytes > 0) {
         lines.push("VRAM " + Model.formatGib(Model.gibFromBytes(hw.gpuVramUsedBytes)) + " / "
                    + Model.formatGib(Model.gibFromBytes(hw.gpuVramTotalBytes)) + " GiB  ·  "
@@ -432,9 +449,13 @@ Panel {
 
     if (hw.processReport && hw.processReport.ok) {
       var top = hw.processReport.cpu[0]
+      var topMem = hw.processReport.mem[0]
+      if (top || topMem) lines.push("")
       if (top) {
-        lines.push("")
         lines.push("Top " + Model.clampText(top.comm, 20) + " " + Model.formatPercent(top.cpuPct))
+      }
+      if (topMem) {
+        lines.push("TopMem " + Model.clampText(topMem.comm, 20) + " " + Model.formatKib(topMem.rssKib))
       }
     }
 
@@ -519,6 +540,15 @@ Panel {
   implicitWidth: onThisScreen ? button.implicitWidth : 0
   implicitHeight: button.implicitHeight
 
+  // An unknown connector name hides the widget entirely; say so loudly
+  // instead of failing silent.
+  onOnThisScreenChanged: {
+    if (!onThisScreen && monitors.length > 0) {
+      console.warn(moduleName + ": hidden, screen '" + screenName
+        + "' is not in monitors [" + monitors.join(",") + "]")
+    }
+  }
+
   WidgetButton {
     id: button
     anchors.fill: parent
@@ -577,11 +607,15 @@ Panel {
     showFan: root.showFan
     ramFormat: root.ramFormat
     tempFormat: root.tempFormat
+    showGauges: root.showGauges
+    showValues: root.showValues
     fahrenheit: root.fahrenheit
     warnPercent: root.warnPercent
     criticalPercent: root.criticalPercent
     warnTempC: root.warnTempC
     criticalTempC: root.criticalTempC
+    warnFanRpm: root.warnFanRpm
+    criticalFanRpm: root.criticalFanRpm
     topProcessCount: root.topProcessCount
     cpuThresholdPct: root.cpuThresholdPct
     memThresholdMib: root.memThresholdMib

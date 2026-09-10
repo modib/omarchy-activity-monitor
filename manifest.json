@@ -3,10 +3,10 @@
   "schemaVersion": 1,
   "id": "modib.activity-monitor",
   "name": "Activity Monitor",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": "modib",
   "license": "MIT",
-  "description": "A system activity monitor for the Omarchy bar: CPU and memory load side by side, temperature and fan RPM pinned to the right edge, and a popup panel with live history graphs plus Heaviest CPU and Heaviest Memory process lists.",
+  "description": "A system activity monitor for the Omarchy bar: CPU, GPU, and memory load side by side, temperature and fan RPM pinned to the right edge, and a popup panel with live history graphs plus Heaviest CPU and Heaviest Memory process lists.",
   "repository": "https://github.com/modib/omarchy-activity-monitor",
   "kinds": [
     "bar-widget"
@@ -41,6 +41,8 @@
       "criticalPercent": 90,
       "warnTempC": 75,
       "criticalTempC": 90,
+      "warnFanRpm": 3500,
+      "criticalFanRpm": 5000,
       "gpuIcon": "󰾲",
       "cpuIcon": "",
       "tempIcon": "",
@@ -67,14 +69,14 @@
           "labels"
         ],
         "defaultValue": "icons",
-        "description": "icons is sleek icon + figures + temperature; compact is glyph + gauge; full adds the temperature; labels spells the readout out as words. Right-clicking the widget cycles them."
+        "description": "icons is glyph + figure per item; compact is glyph + gauge (temperatures omitted); full adds inline temperatures; labels spells the readout out as words. Right-clicking the widget cycles them."
       },
       {
         "key": "itemsOrder",
         "type": "string",
         "label": "Item sequence",
-        "defaultValue": "gpu,cpu,ram,cpu-temp,fan",
-        "description": "Order of telemetry items in the bar, comma-separated: 'gpu,cpu,ram,cpu-temp,fan' with CPU and RAM adjacent and temperature/fan on the right."
+        "defaultValue": "gpu,gpu-temp,cpu,ram,cpu-temp,fan",
+        "description": "Order of telemetry items in the bar, comma-separated: 'gpu,gpu-temp,cpu,ram,cpu-temp,fan' with load figures first and temperature/fan on the right. Items whose sensor is missing or toggled off are skipped."
       },
       {
         "key": "showGpu",
@@ -157,14 +159,14 @@
           "trail"
         ],
         "defaultValue": "none",
-        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'."
+        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'. The legacy value 'space' is accepted as 'trail'."
       },
       {
         "key": "showGauges",
         "type": "boolean",
         "label": "Show vertical gauges",
         "defaultValue": true,
-        "description": "Show vertical battery-style capsule gauges in the bar."
+        "description": "Show vertical capsule gauges beside the glyphs in compact and full modes. In icons mode gauges appear only when explicitly enabled; labels mode never shows gauges."
       },
       {
         "key": "showValues",
@@ -216,7 +218,67 @@
         "key": "ramIcon",
         "type": "string",
         "label": "Memory glyph",
-        "defaultValue": ""
+        "defaultValue": ""
+      },
+      {
+        "key": "gpuIconRotation",
+        "type": "integer",
+        "label": "GPU glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the GPU glyph in degrees. Config-file only."
+      },
+      {
+        "key": "cpuIconRotation",
+        "type": "integer",
+        "label": "CPU glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the CPU glyph in degrees. Config-file only."
+      },
+      {
+        "key": "tempIconRotation",
+        "type": "integer",
+        "label": "Temperature glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the CPU temperature glyph in degrees. Config-file only."
+      },
+      {
+        "key": "gpuTempIconRotation",
+        "type": "integer",
+        "label": "GPU temperature glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the GPU temperature glyph in degrees. Config-file only."
+      },
+      {
+        "key": "ramIconRotation",
+        "type": "integer",
+        "label": "Memory glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the memory glyph in degrees. Config-file only."
+      },
+      {
+        "key": "fanIconRotation",
+        "type": "integer",
+        "label": "Fan glyph rotation (°)",
+        "min": -360,
+        "max": 360,
+        "step": 15,
+        "defaultValue": 0,
+        "description": "Rotate the fan glyph in degrees. Config-file only."
       },
       {
         "key": "iconSize",
@@ -253,7 +315,8 @@
         "min": 1,
         "max": 150,
         "step": 1,
-        "defaultValue": 75
+        "defaultValue": 75,
+        "description": "Temperature (°C) where figures and gauges start warming toward urgent. Below this the readout stays neutral."
       },
       {
         "key": "criticalTempC",
@@ -262,7 +325,28 @@
         "min": 1,
         "max": 150,
         "step": 1,
-        "defaultValue": 90
+        "defaultValue": 90,
+        "description": "Temperature (°C) at full urgent red."
+      },
+      {
+        "key": "warnFanRpm",
+        "type": "integer",
+        "label": "Warning fan (RPM)",
+        "min": 0,
+        "max": 20000,
+        "step": 250,
+        "defaultValue": 3500,
+        "description": "Fan speed (RPM) where the fan figure starts warming toward urgent."
+      },
+      {
+        "key": "criticalFanRpm",
+        "type": "integer",
+        "label": "Critical fan (RPM)",
+        "min": 0,
+        "max": 20000,
+        "step": 250,
+        "defaultValue": 5000,
+        "description": "Fan speed (RPM) at full urgent red."
       },
       {
         "key": "showFan",
@@ -283,7 +367,7 @@
         "type": "string",
         "label": "Monitors",
         "defaultValue": "",
-        "description": "Which screens to draw on by connector name (e.g. 'DP-1,HDMI-A-1'). Empty means all screens."
+        "description": "Which screens to draw on by connector name (e.g. 'DP-1,HDMI-A-1'). Empty means all screens. An unknown connector hides the widget and logs a warning."
       },
       {
         "key": "clickCommand",
@@ -310,7 +394,7 @@
         "max": 5,
         "step": 1,
         "defaultValue": 5,
-        "description": "How many rows each of the Heaviest CPU and Heaviest Memory lists shows in the panel (3-5 recommended)."
+        "description": "How many rows each of the Heaviest CPU and Heaviest Memory lists shows in the panel (capped at 5; the survey always over-fetches so a lower cap costs nothing)."
       },
       {
         "key": "cpuThresholdPct",

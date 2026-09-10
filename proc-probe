@@ -17,6 +17,8 @@
 #
 # Env knobs (all optional):
 #   HW_TOP_N         how many rows in the cpu / mem lists       (default 15)
+#                    Internal over-fetch: the panel caps to topProcessCount
+#                    (max 5), so this stays above any panel cap on purpose.
 
 export LC_ALL=C
 set -u
@@ -107,9 +109,10 @@ read -r TICKS2 NCPUS <<< "$t2"
 TICKS_TOTAL=$(( (TICKS2 > TICKS1 ? TICKS2 : TICKS1) - TICKS1 ))
 (( TICKS_TOTAL > 0 )) || TICKS_TOTAL=1
 
-# No focused-window or consume-idle logic — with the Idle Apps table gone the
-# probe only ranks CPU and memory consumers, both view-only with consent-gated
-# kill actions.
+# The probe only ranks CPU and memory consumers — both lists are view-only,
+# with consent-gated kill actions offered by the panel. The meta line keeps
+# its fixed 5-field shape (ts, ncpus, active-pid, owner-uid) for parser
+# compatibility; active-pid is always 0 and unused.
 ACTIVE_PID=0
 
 # ------------------------------------------------------------------- reduce
