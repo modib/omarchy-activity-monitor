@@ -37,12 +37,22 @@ function parseProbe(raw) {
   }
 }
 
-// Pick which discovered card the widget reports on. `auto` means the first,
-// which hw-probe has already sorted so a card with a load counter wins.
+// Pick which discovered card the widget reports on. `auto` prefers a
+// discrete GPU when more than one card is present: hw-probe lists sysfs
+// cards before NVIDIA (cheaper counters are probed first), so on an
+// APU+dGPU hybrid the first entry is the integrated GPU nobody asked about.
+// Single-GPU machines and an explicit preference are unaffected.
 function pickGpu(gpus, preference) {
   if (!(gpus instanceof Array) || gpus.length === 0) return null
   var want = String(preference === undefined || preference === null ? "auto" : preference).trim().toLowerCase()
-  if (want === "" || want === "auto") return gpus[0]
+  if (want === "" || want === "auto") {
+    if (gpus.length > 1) {
+      for (var d = 0; d < gpus.length; d++) {
+        if (String(gpus[d].kind || "").toLowerCase() === "nvidia") return gpus[d]
+      }
+    }
+    return gpus[0]
+  }
 
   var index = parseInt(want, 10)
   if (isFinite(index) && index >= 0 && index < gpus.length) return gpus[index]

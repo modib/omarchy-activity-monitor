@@ -205,7 +205,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `gpuIconRotation` / `cpuIconRotation` / `tempIconRotation` / `gpuTempIconRotation` / `ramIconRotation` / `fanIconRotation` | int | `0` | Glyph rotation in degrees (-360…360). Config-file only. |
 | `iconSize` | int | `0` | Glyph size in pixels; `0` follows the bar's icon font. |
 | `refreshIntervalSec` | int | `2` | Seconds between sensor file reads. |
-| `gpu` | string | `"auto"` | `"auto"`, a card index, or a name substring. |
+| `gpu` | string | `"auto"` | `"auto"` prefers a discrete GPU when more than one card is found (an AMD-dGPU + AMD-iGPU or two-Intel-card pair stays positional — use an explicit value there); otherwise a card index or a name substring. |
 | `warnPercent` | int | `70` | Load where figures start warming. |
 | `criticalPercent` | int | `90` | Load where figures reach full urgent. |
 | `warnTempC` | int | `75` | Temperature (°C) where figures start warming; below this the readout stays neutral. |
