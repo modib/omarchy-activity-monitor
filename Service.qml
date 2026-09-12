@@ -196,7 +196,16 @@ Item {
       cpuTempC = readTemp(cpuTempFile)
     }
 
-    if (fanFile.path !== "") {
+    if (ecFanFile.path !== "") {
+      ecFanFile.reload()
+      var ecRpm = readNumber(ecFanFile, 0)
+      if (ecRpm > 0) {
+        fanRpm = ecRpm
+      } else {
+        fanFile.reload()
+        fanRpm = readNumber(fanFile, 0)
+      }
+    } else if (fanFile.path !== "") {
       fanFile.reload()
       fanRpm = readNumber(fanFile, 0)
     }
@@ -281,6 +290,14 @@ Item {
   FileView {
     id: fanFile
     path: root.hasFan ? String(root.fanInfo.path) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+
+  // HP 250 G9: EC-backed RPM — firmware zeroes WMI fan query (bug 221149).
+  FileView {
+    id: ecFanFile
+    path: "/run/hp-fan-rpm"
     blockAllReads: true
     printErrors: false
   }
