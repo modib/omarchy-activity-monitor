@@ -52,8 +52,9 @@ Item {
   readonly property var fanInfo: probe.fan
   readonly property bool hasFan: fanInfo !== null && fanInfo !== undefined
   readonly property bool hasTempSensor: cpuTempFile.path !== ""
-  readonly property bool hasFanSensor: fanFile.path !== ""
-    && fanInfo.path !== undefined && fanInfo.path !== null && fanInfo.path !== ""
+  readonly property bool hasFanSensor: (fanFile.path !== ""
+    && fanInfo.path !== undefined && fanInfo.path !== null && fanInfo.path !== "")
+    || fanOverrideFile.path !== ""
 
   // -------------------------------------------------------------- readings
   //
@@ -207,7 +208,9 @@ Item {
     if (fanOverrideFile.path !== "") {
       fanOverrideFile.reload()
       var overrideRpm = readNumber(fanOverrideFile, 0)
-      if (overrideRpm > 0) {
+      // -1 means unreadable/garbage — fall back. 0 is a real reading (fan
+      // off), so it overrides too and renders "idle" honestly.
+      if (overrideRpm >= 0) {
         fanRpm = overrideRpm
       } else {
         fanFile.reload()
