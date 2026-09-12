@@ -16,7 +16,7 @@
   },
   "barWidget": {
     "displayName": "Activity Monitor",
-    "description": "CPU, RAM, GPU, temperature, and fan load as sleek icon readouts, with a popup that ranks the heaviest CPU and memory consumers. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
+    "description": "CPU, RAM, GPU, temperature, and fan load as sleek icon readouts, with a popup that ranks the heaviest CPU and memory consumers and shows a second card when the machine has both an integrated and a discrete GPU. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
     "category": "System",
     "allowMultiple": true,
     "defaultSection": "right",
@@ -30,6 +30,7 @@
       "showGpuTemp": false,
       "showRam": true,
       "showFan": true,
+      "showMultiGpu": true,
       "showGauges": true,
       "showValues": false,
       "iconSize": 0,
@@ -356,11 +357,18 @@
         "description": "Show the fan RPM figure and glyph in the top bar whenever a readable fan exists."
       },
       {
+        "key": "showMultiGpu",
+        "type": "boolean",
+        "label": "Show second GPU",
+        "defaultValue": true,
+        "description": "Show a second Graphics Telemetry card in the panel when the machine has more than one GPU. The bar always shows only the gpu-selected card."
+      },
+      {
         "key": "gpu",
         "type": "string",
         "label": "GPU card preference",
         "defaultValue": "auto",
-        "description": "'auto' picks the active card; otherwise an index ('0', '1') or name substring."
+        "description": "'auto' prefers a discrete GPU when more than one card is found; otherwise an index ('0', '1') or name substring."
       },
       {
         "key": "monitors",

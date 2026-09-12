@@ -122,6 +122,12 @@ figure.
 | Load average | `/proc/loadavg` | 1/5/15 minute |
 | Processes | [`proc-probe`](proc-probe) survey | Heaviest CPU and Heaviest Memory |
 
+On a machine with more than one GPU, the panel's Graphics Telemetry section
+shows a card for the one `gpu` resolved to *and* a second card for the other
+GPU it found — an iGPU alongside a dGPU, for example — each sampled and
+rendered independently. Toggle this off with `showMultiGpu`. The bar itself
+always shows only the `gpu`-selected card, to keep it from doubling in width.
+
 ## How it samples
 
 Sensor paths are located once at load by [`hw-probe`](hw-probe) — a small shell
@@ -189,6 +195,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `showGpuTemp` | bool | `false` | Show GPU temperature in the bar (`icons` mode; inline in `full`/`labels`). |
 | `showRam` | bool | `true` | Show memory usage. |
 | `showFan` | bool | `true` | Show the fan RPM cell when a readable fan exists (every mode except `compact`). |
+| `showMultiGpu` | bool | `true` | Show a second Graphics Telemetry card in the panel when the machine has more than one GPU. The bar always shows only the `gpu`-selected card. |
 | `ramFormat` | string | `"used/total"` | `"used/total"`, `"used"`, `"percent"`, `"free"`, or `"available"`. |
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"`, `"degree"`, `"unit"`, `"unit-lower"`, or `"bare"`. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
@@ -205,7 +212,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `gpuIconRotation` / `cpuIconRotation` / `tempIconRotation` / `gpuTempIconRotation` / `ramIconRotation` / `fanIconRotation` | int | `0` | Glyph rotation in degrees (-360…360). Config-file only. |
 | `iconSize` | int | `0` | Glyph size in pixels; `0` follows the bar's icon font. |
 | `refreshIntervalSec` | int | `2` | Seconds between sensor file reads. |
-| `gpu` | string | `"auto"` | `"auto"`, a card index, or a name substring. |
+| `gpu` | string | `"auto"` | `"auto"` prefers a discrete GPU when more than one card is found (an AMD-dGPU + AMD-iGPU or two-Intel-card pair stays positional — use an explicit value there); otherwise a card index or a name substring. |
 | `warnPercent` | int | `70` | Load where figures start warming. |
 | `criticalPercent` | int | `90` | Load where figures reach full urgent. |
 | `warnTempC` | int | `75` | Temperature (°C) where figures start warming; below this the readout stays neutral. |
