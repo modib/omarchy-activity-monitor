@@ -356,6 +356,13 @@
         "description": "Show the fan RPM figure and glyph in the top bar whenever a readable fan exists."
       },
       {
+        "key": "fanOverridePath",
+        "type": "string",
+        "label": "Fan override path",
+        "defaultValue": "",
+        "description": "Optional file whose content (a plain integer, re-read every sample) overrides the fan RPM readout whenever it is positive — for machines whose firmware reports a stuck 0 (e.g. HP 250 G9, where the WMI fan query is zeroed and hp-wmi fan*_input reads 0 RPM). Point it at a file published by a small root helper such as an ec_sys-based publisher; see README 'Fan override'. Empty keeps the normal hwmon fan input."
+      },
+      {
         "key": "gpu",
         "type": "string",
         "label": "GPU card preference",
