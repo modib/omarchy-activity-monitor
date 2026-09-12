@@ -125,8 +125,8 @@ figure.
 On a machine with more than one GPU, the panel's Graphics Telemetry section
 shows a card for the one `gpu` resolved to *and* a second card for the other
 GPU it found — an iGPU alongside a dGPU, for example — each sampled and
-rendered independently. The bar itself still shows only the `gpu`-selected
-card, to keep it from doubling in width.
+rendered independently. Toggle this off with `showMultiGpu`. The bar itself
+always shows only the `gpu`-selected card, to keep it from doubling in width.
 
 ## How it samples
 
@@ -195,6 +195,7 @@ omarchy bar set modib.activity-monitor fahrenheit true --json
 | `showGpuTemp` | bool | `false` | Show GPU temperature in the bar (`icons` mode; inline in `full`/`labels`). |
 | `showRam` | bool | `true` | Show memory usage. |
 | `showFan` | bool | `true` | Show the fan RPM cell when a readable fan exists (every mode except `compact`). |
+| `showMultiGpu` | bool | `true` | Show a second Graphics Telemetry card in the panel when the machine has more than one GPU. The bar always shows only the `gpu`-selected card. |
 | `ramFormat` | string | `"used/total"` | `"used/total"`, `"used"`, `"percent"`, `"free"`, or `"available"`. |
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"`, `"degree"`, `"unit"`, `"unit-lower"`, or `"bare"`. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |

@@ -30,6 +30,7 @@
       "showGpuTemp": false,
       "showRam": true,
       "showFan": true,
+      "showMultiGpu": true,
       "showGauges": true,
       "showValues": false,
       "iconSize": 0,
@@ -354,6 +355,13 @@
         "label": "Show fan RPM",
         "defaultValue": true,
         "description": "Show the fan RPM figure and glyph in the top bar whenever a readable fan exists."
+      },
+      {
+        "key": "showMultiGpu",
+        "type": "boolean",
+        "label": "Show second GPU",
+        "defaultValue": true,
+        "description": "Show a second Graphics Telemetry card in the panel when the machine has more than one GPU. The bar always shows only the gpu-selected card."
       },
       {
         "key": "gpu",

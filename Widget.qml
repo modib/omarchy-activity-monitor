@@ -67,6 +67,7 @@ Panel {
   readonly property bool showGpuTemp: boolSetting("showGpuTemp", false)
   readonly property bool showRam: boolSetting("showRam", true)
   readonly property bool showFan: boolSetting("showFan", true)
+  readonly property bool showMultiGpu: boolSetting("showMultiGpu", true)
 
   readonly property var itemOrder: {
     // Load figures first; anything thermal or spinning goes on the right.
@@ -605,6 +606,7 @@ Panel {
     showGpuTemp: root.showGpuTemp
     showRam: root.showRam
     showFan: root.showFan
+    showMultiGpu: root.showMultiGpu
     ramFormat: root.ramFormat
     tempFormat: root.tempFormat
     showGauges: root.showGauges

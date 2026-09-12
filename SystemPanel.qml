@@ -28,6 +28,7 @@ KeyboardPanel {
   property bool showGpuTemp: false
   property bool showRam: true
   property bool showFan: true
+  property bool showMultiGpu: true
   property string ramFormat: "used/total"
   property string tempFormat: "degree-unit"
   property bool showGauges: true
@@ -462,6 +463,11 @@ Text {
                   selected: root.showFan
                   onPicked: root.persistSetting("showFan", !root.showFan)
                 }
+                ModeChip {
+                  label: "\uDB83\uDFB2 Multi-GPU"
+                  selected: root.showMultiGpu
+                  onPicked: root.persistSetting("showMultiGpu", !root.showMultiGpu)
+                }
               }
             }
 
@@ -702,7 +708,7 @@ Text {
         }
 
         GpuCard {
-          visible: hw.hasSecondaryGpu
+          visible: hw.hasSecondaryGpu && root.showMultiGpu
           gpuName: hw.secondaryGpuInfo && hw.secondaryGpuInfo.name ? hw.secondaryGpuInfo.name : "Graphics Adapter"
           gpuKind: hw.secondaryGpuInfo && hw.secondaryGpuInfo.kind ? String(hw.secondaryGpuInfo.kind) : ""
           percent: hw.gpu2Percent
