@@ -41,6 +41,13 @@ Item {
   readonly property bool hasGpu: gpuInfo !== null
   readonly property bool gpuIsNvidia: hasGpu && String(gpuInfo.kind) === "nvidia"
 
+  // The other card on a two-GPU machine (typically an iGPU alongside the
+  // dGPU `gpuInfo` resolved to), sampled the same way as the primary so the
+  // panel can show both. Null on a single-GPU machine.
+  readonly property var secondaryGpuInfo: hasGpu ? Model.pickOtherGpu(probe.gpus, gpuInfo) : null
+  readonly property bool hasSecondaryGpu: secondaryGpuInfo !== null
+  readonly property bool secondaryGpuIsNvidia: hasSecondaryGpu && String(secondaryGpuInfo.kind) === "nvidia"
+
   readonly property var fanInfo: probe.fan
   readonly property bool hasFan: fanInfo !== null && fanInfo !== undefined
   readonly property bool hasTempSensor: cpuTempFile.path !== ""
@@ -87,6 +94,17 @@ Item {
   property real gpuVramTotalBytes: -1
   readonly property real gpuVramPercent: gpuVramTotalBytes > 0
     ? Model.clamp(100 * gpuVramUsedBytes / gpuVramTotalBytes, 0, 100) : -1
+
+  // Secondary GPU readings, same shape as the primary set above.
+  property real gpu2Percent: -1
+  property real gpu2TempC: -1
+  property real gpu2Watts: -1
+  property real gpu2Rpm: -1
+  property real gpu2Mhz: -1
+  property real gpu2VramUsedBytes: -1
+  property real gpu2VramTotalBytes: -1
+  readonly property real gpu2VramPercent: gpu2VramTotalBytes > 0
+    ? Model.clamp(100 * gpu2VramUsedBytes / gpu2VramTotalBytes, 0, 100) : -1
 
   // The process readouts behind the popup's Heaviest CPU and Heaviest Memory
   // lists. processReport is replaced wholesale by the last completed proc-probe
@@ -203,6 +221,14 @@ Item {
 
     root.pushSensorHistory(cpuTempC, fanRpm)
 
+    sampleGpu()
+    sampleSecondaryGpu()
+  }
+
+  // Split out from sample() because each card samples independently: an
+  // NVIDIA primary polling nvidia-smi asynchronously must not skip a sysfs
+  // secondary (or vice versa) the way a shared early `return` once did.
+  function sampleGpu() {
     if (gpuIsNvidia) {
       sampleNvidia()
       return
@@ -238,6 +264,44 @@ Item {
     }
   }
 
+  function sampleSecondaryGpu() {
+    if (!hasSecondaryGpu) return
+
+    if (secondaryGpuIsNvidia) {
+      sampleNvidia2()
+      return
+    }
+
+    if (gpu2BusyFile.path !== "") {
+      gpu2BusyFile.reload()
+      gpu2Percent = readNumber(gpu2BusyFile, 0)
+    }
+    if (gpu2TempFile.path !== "") {
+      gpu2TempFile.reload()
+      gpu2TempC = readTemp(gpu2TempFile)
+    }
+    if (gpu2PowerFile.path !== "") {
+      gpu2PowerFile.reload()
+      gpu2Watts = readNumber(gpu2PowerFile, 1000000)
+    }
+    if (gpu2FanFile.path !== "") {
+      gpu2FanFile.reload()
+      gpu2Rpm = readNumber(gpu2FanFile, 0)
+    }
+    if (gpu2ClockFile.path !== "") {
+      gpu2ClockFile.reload()
+      gpu2Mhz = readNumber(gpu2ClockFile, 1000000)
+    }
+    if (gpu2VramUsedFile.path !== "") {
+      gpu2VramUsedFile.reload()
+      gpu2VramUsedBytes = readNumber(gpu2VramUsedFile, 0)
+    }
+    if (gpu2VramTotalFile.path !== "") {
+      gpu2VramTotalFile.reload()
+      gpu2VramTotalBytes = readNumber(gpu2VramTotalFile, 0)
+    }
+  }
+
   function sampleNvidia() {
     if (nvidiaProcess.running) return
     // fan.speed is deliberately not queried: nvidia-smi reports it as a
@@ -258,6 +322,26 @@ Item {
     gpuVramUsedBytes = sample.vramUsedBytes
     gpuVramTotalBytes = sample.vramTotalBytes
     gpuMhz = sample.mhz
+  }
+
+  function sampleNvidia2() {
+    if (nvidiaProcess2.running) return
+    nvidiaProcess2.command = ["nvidia-smi",
+                              "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,clocks.current.graphics",
+                              "--format=csv,noheader,nounits",
+                              "--id=" + String(secondaryGpuInfo.index !== undefined ? secondaryGpuInfo.index : 0)]
+    nvidiaProcess2.running = true
+  }
+
+  function applyNvidia2(raw) {
+    var sample = Model.parseNvidia(raw)
+    if (!sample) return
+    gpu2Percent = sample.busy
+    gpu2TempC = sample.tempC
+    gpu2Watts = sample.watts
+    gpu2VramUsedBytes = sample.vramUsedBytes
+    gpu2VramTotalBytes = sample.vramTotalBytes
+    gpu2Mhz = sample.mhz
   }
 
   // ----------------------------------------------------------------- files
@@ -330,6 +414,51 @@ Item {
     printErrors: false
   }
 
+  // Same set again for the secondary card. Every path is empty (and every
+  // read skipped) on a single-GPU machine, so this costs nothing there.
+  FileView {
+    id: gpu2BusyFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.busyPath ? String(root.secondaryGpuInfo.busyPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpu2TempFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.tempPath ? String(root.secondaryGpuInfo.tempPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpu2PowerFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.powerPath ? String(root.secondaryGpuInfo.powerPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpu2FanFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.fanPath ? String(root.secondaryGpuInfo.fanPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpu2ClockFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.clockPath ? String(root.secondaryGpuInfo.clockPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpu2VramUsedFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.vramUsedPath ? String(root.secondaryGpuInfo.vramUsedPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpu2VramTotalFile
+    path: root.hasSecondaryGpu && root.secondaryGpuInfo.vramTotalPath ? String(root.secondaryGpuInfo.vramTotalPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+
   // ------------------------------------------------------------- processes
 
   Process {
@@ -350,6 +479,12 @@ Item {
   Process {
     id: nvidiaProcess
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyNvidia(text) }
+    stderr: StdioCollector { waitForEnd: true }
+  }
+
+  Process {
+    id: nvidiaProcess2
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyNvidia2(text) }
     stderr: StdioCollector { waitForEnd: true }
   }
 

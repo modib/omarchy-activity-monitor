@@ -684,127 +684,35 @@ Text {
           }
         }
 
-        // Graphics Telemetry Section (if GPU present)
-        Rectangle {
-          width: parent.width
-          implicitHeight: gpuCol.implicitHeight + Style.space(24)
-          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
-          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
-          border.width: 1
-          radius: Style.cornerRadius
+        // Graphics Telemetry Section: one card per GPU. Most machines have
+        // just the primary; a hybrid iGPU+dGPU machine gets a second card
+        // right below it.
+        GpuCard {
           visible: hw.hasGpu
+          gpuName: hw.gpuInfo && hw.gpuInfo.name ? hw.gpuInfo.name : "Graphics Adapter"
+          gpuKind: hw.gpuInfo && hw.gpuInfo.kind ? String(hw.gpuInfo.kind) : ""
+          percent: hw.gpuPercent
+          tempC: hw.gpuTempC
+          watts: hw.gpuWatts
+          mhz: hw.gpuMhz
+          rpm: hw.gpuRpm
+          vramUsedBytes: hw.gpuVramUsedBytes
+          vramTotalBytes: hw.gpuVramTotalBytes
+          vramPercent: hw.gpuVramPercent
+        }
 
-          Column {
-            id: gpuCol
-            anchors.fill: parent
-            anchors.margins: Style.space(12)
-            spacing: Style.space(10)
-
-            Row {
-              width: parent.width
-              spacing: Style.space(6)
-
-              Text {
-                textFormat: Text.PlainText
-                text: "󰾲"
-                color: Color.accent
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                anchors.verticalCenter: parent.verticalCenter
-              }
-
-              Text {
-                textFormat: Text.PlainText
-                text: hw.gpuInfo && hw.gpuInfo.name ? hw.gpuInfo.name : "Graphics Adapter"
-                color: root.baseColor
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                font.bold: true
-                wrapMode: Text.Wrap
-                anchors.verticalCenter: parent.verticalCenter
-              }
-            }
-
-            // VRAM Meter
-            Column {
-              width: parent.width
-              spacing: Style.space(4)
-              visible: hw.gpuVramTotalBytes > 0
-
-              Row {
-                width: parent.width
-
-                Text {
-                  id: vramLabel
-                  textFormat: Text.PlainText
-                  text: "VRAM"
-                  color: Qt.darker(root.baseColor, 1.4)
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                }
-
-                Item {
-                  width: Math.max(0, parent.width - vramLabel.implicitWidth - vramValue.implicitWidth)
-                  height: 1
-                }
-
-                Text {
-                  id: vramValue
-                  textFormat: Text.PlainText
-                  text: hw.gpuVramTotalBytes > 0 ? (Model.formatGib(Model.gibFromBytes(hw.gpuVramUsedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(hw.gpuVramTotalBytes)) + " GiB (" + Math.round(hw.gpuVramPercent) + "%)") : "–"
-                  color: root.warm(root.baseColor, Model.severity(hw.gpuVramPercent, root.warnPercent, root.criticalPercent))
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                }
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(6)
-                radius: height / 2
-                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.bottom: parent.bottom
-                  radius: parent.radius
-                  color: root.warm(root.baseColor, Model.severity(hw.gpuVramPercent, root.warnPercent, root.criticalPercent))
-                  width: hw.gpuVramPercent >= 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.gpuVramPercent / 100))) : 0
-                  Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-                }
-              }
-            }
-
-            Row {
-              width: parent.width
-              spacing: Style.space(16)
-
-              Column {
-                width: (parent.width - parent.spacing) / 2
-                spacing: Style.spacing.labelGap
-
-                InfoPair { label: "Load"; value: hw.gpuPercent >= 0 ? Model.formatPercent(hw.gpuPercent) : "–" }
-                InfoPair {
-                  label: "Temperature"
-                  value: hw.gpuTempC > 0 ? Model.formatTemp(hw.gpuTempC, root.fahrenheit) : "–"
-                  valueColor: root.tempColor(hw.gpuTempC)
-                }
-                InfoPair { label: "Power"; value: hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "–" }
-              }
-
-              Column {
-                width: (parent.width - parent.spacing) / 2
-                spacing: Style.spacing.labelGap
-
-                InfoPair { label: "Clock"; value: hw.gpuMhz > 0 ? Model.formatGhz(hw.gpuMhz) : "–" }
-                InfoPair { label: "Fan"; value: hw.gpuRpm >= 0 ? Model.formatRpm(hw.gpuRpm) : "–" }
-                InfoPair { label: "Driver"; value: hw.gpuInfo && hw.gpuInfo.kind ? String(hw.gpuInfo.kind) : "–" }
-              }
-            }
-          }
+        GpuCard {
+          visible: hw.hasSecondaryGpu
+          gpuName: hw.secondaryGpuInfo && hw.secondaryGpuInfo.name ? hw.secondaryGpuInfo.name : "Graphics Adapter"
+          gpuKind: hw.secondaryGpuInfo && hw.secondaryGpuInfo.kind ? String(hw.secondaryGpuInfo.kind) : ""
+          percent: hw.gpu2Percent
+          tempC: hw.gpu2TempC
+          watts: hw.gpu2Watts
+          mhz: hw.gpu2Mhz
+          rpm: hw.gpu2Rpm
+          vramUsedBytes: hw.gpu2VramUsedBytes
+          vramTotalBytes: hw.gpu2VramTotalBytes
+          vramPercent: hw.gpu2VramPercent
         }
 
         // Two short process lists — Heaviest CPU, Heaviest Memory — are the
@@ -1410,6 +1318,142 @@ Text {
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
       Behavior on color { ColorAnimation { duration: 240 } }
+    }
+  }
+
+  // One GPU's telemetry box. Instantiated once per card so a hybrid
+  // iGPU+dGPU machine gets two of these stacked in the panel instead of
+  // only ever seeing whichever card the `gpu` setting picked.
+  component GpuCard: Rectangle {
+    id: gpuCard
+    property string gpuName: "Graphics Adapter"
+    property string gpuKind: ""
+    property real percent: -1
+    property real tempC: -1
+    property real watts: -1
+    property real mhz: -1
+    property real rpm: -1
+    property real vramUsedBytes: -1
+    property real vramTotalBytes: -1
+    property real vramPercent: -1
+
+    width: parent.width
+    implicitHeight: gpuCardCol.implicitHeight + Style.space(24)
+    color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+    border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+    border.width: 1
+    radius: Style.cornerRadius
+
+    Column {
+      id: gpuCardCol
+      anchors.fill: parent
+      anchors.margins: Style.space(12)
+      spacing: Style.space(10)
+
+      Row {
+        width: parent.width
+        spacing: Style.space(6)
+
+        Text {
+          textFormat: Text.PlainText
+          text: "󰾲"
+          color: Color.accent
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          text: gpuCard.gpuName
+          color: root.baseColor
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          font.bold: true
+          wrapMode: Text.Wrap
+          anchors.verticalCenter: parent.verticalCenter
+        }
+      }
+
+      // VRAM Meter
+      Column {
+        width: parent.width
+        spacing: Style.space(4)
+        visible: gpuCard.vramTotalBytes > 0
+
+        Row {
+          width: parent.width
+
+          Text {
+            id: gpuCardVramLabel
+            textFormat: Text.PlainText
+            text: "VRAM"
+            color: Qt.darker(root.baseColor, 1.4)
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+
+          Item {
+            width: Math.max(0, parent.width - gpuCardVramLabel.implicitWidth - gpuCardVramValue.implicitWidth)
+            height: 1
+          }
+
+          Text {
+            id: gpuCardVramValue
+            textFormat: Text.PlainText
+            text: gpuCard.vramTotalBytes > 0 ? (Model.formatGib(Model.gibFromBytes(gpuCard.vramUsedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(gpuCard.vramTotalBytes)) + " GiB (" + Math.round(gpuCard.vramPercent) + "%)") : "–"
+            color: root.warm(root.baseColor, Model.severity(gpuCard.vramPercent, root.warnPercent, root.criticalPercent))
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+        }
+
+        Rectangle {
+          width: parent.width
+          height: Style.space(6)
+          radius: height / 2
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+
+          Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            radius: parent.radius
+            color: root.warm(root.baseColor, Model.severity(gpuCard.vramPercent, root.warnPercent, root.criticalPercent))
+            width: gpuCard.vramPercent >= 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * (gpuCard.vramPercent / 100))) : 0
+            Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+          }
+        }
+      }
+
+      Row {
+        width: parent.width
+        spacing: Style.space(16)
+
+        Column {
+          width: (parent.width - parent.spacing) / 2
+          spacing: Style.spacing.labelGap
+
+          InfoPair { label: "Load"; value: gpuCard.percent >= 0 ? Model.formatPercent(gpuCard.percent) : "–" }
+          InfoPair {
+            label: "Temperature"
+            value: gpuCard.tempC > 0 ? Model.formatTemp(gpuCard.tempC, root.fahrenheit) : "–"
+            valueColor: root.tempColor(gpuCard.tempC)
+          }
+          InfoPair { label: "Power"; value: gpuCard.watts >= 0 ? Model.formatWatts(gpuCard.watts) : "–" }
+        }
+
+        Column {
+          width: (parent.width - parent.spacing) / 2
+          spacing: Style.spacing.labelGap
+
+          InfoPair { label: "Clock"; value: gpuCard.mhz > 0 ? Model.formatGhz(gpuCard.mhz) : "–" }
+          InfoPair { label: "Fan"; value: gpuCard.rpm >= 0 ? Model.formatRpm(gpuCard.rpm) : "–" }
+          InfoPair { label: "Driver"; value: gpuCard.gpuKind ? gpuCard.gpuKind : "–" }
+        }
+      }
     }
   }
 }

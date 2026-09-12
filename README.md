@@ -122,6 +122,12 @@ figure.
 | Load average | `/proc/loadavg` | 1/5/15 minute |
 | Processes | [`proc-probe`](proc-probe) survey | Heaviest CPU and Heaviest Memory |
 
+On a machine with more than one GPU, the panel's Graphics Telemetry section
+shows a card for the one `gpu` resolved to *and* a second card for the other
+GPU it found — an iGPU alongside a dGPU, for example — each sampled and
+rendered independently. The bar itself still shows only the `gpu`-selected
+card, to keep it from doubling in width.
+
 ## How it samples
 
 Sensor paths are located once at load by [`hw-probe`](hw-probe) — a small shell

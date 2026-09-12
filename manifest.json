@@ -16,7 +16,7 @@
   },
   "barWidget": {
     "displayName": "Activity Monitor",
-    "description": "CPU, RAM, GPU, temperature, and fan load as sleek icon readouts, with a popup that ranks the heaviest CPU and memory consumers. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
+    "description": "CPU, RAM, GPU, temperature, and fan load as sleek icon readouts, with a popup that ranks the heaviest CPU and memory consumers and shows a second card when the machine has both an integrated and a discrete GPU. CPU temperature and fan RPM stay in the bar whenever a reading exists.",
     "category": "System",
     "allowMultiple": true,
     "defaultSection": "right",

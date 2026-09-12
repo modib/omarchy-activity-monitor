@@ -67,6 +67,18 @@ function pickGpu(gpus, preference) {
   return gpus[0]
 }
 
+// The other GPU on a two-card machine, so the panel can show an integrated
+// and a discrete card side by side instead of only whichever `pickGpu` chose.
+// Reference identity, not a deep compare: `primary` is always one of `gpus`'s
+// own entries.
+function pickOtherGpu(gpus, primary) {
+  if (!(gpus instanceof Array) || !primary) return null
+  for (var i = 0; i < gpus.length; i++) {
+    if (gpus[i] !== primary) return gpus[i]
+  }
+  return null
+}
+
 // --------------------------------------------------------------------- cpu
 
 // The aggregate line of /proc/stat holds cumulative jiffies since boot:
