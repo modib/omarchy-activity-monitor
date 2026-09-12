@@ -208,9 +208,11 @@ Item {
     if (fanOverrideFile.path !== "") {
       fanOverrideFile.reload()
       var overrideRpm = readNumber(fanOverrideFile, 0)
-      // -1 means unreadable/garbage — fall back. 0 is a real reading (fan
-      // off), so it overrides too and renders "idle" honestly.
-      if (overrideRpm >= 0) {
+      var overrideText = String(fanOverrideFile.text()).trim()
+      // -1 means unreadable/garbage, and empty means the publisher is absent
+      // (a missing file reads as "") — both fall back. 0 is a real reading
+      // (fan off), so it overrides and renders "idle" honestly.
+      if (overrideRpm >= 0 && overrideText !== "") {
         fanRpm = overrideRpm
       } else {
         fanFile.reload()

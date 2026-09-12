@@ -360,7 +360,7 @@
         "type": "string",
         "label": "Fan override path",
         "defaultValue": "",
-        "description": "Optional file whose content (a plain integer, re-read every sample) overrides the fan RPM readout whenever it is positive — for machines whose firmware reports a stuck 0 (e.g. HP 250 G9, where the WMI fan query is zeroed and hp-wmi fan*_input reads 0 RPM). Point it at a file published by a small root helper such as an ec_sys-based publisher; see README 'Fan override'. Empty keeps the normal hwmon fan input."
+        "description": "Optional file whose content (a plain integer, re-read every sample) overrides the fan RPM readout whenever it is zero or positive (0 renders a stopped fan honestly) — for machines whose firmware reports a stuck 0 (e.g. HP 250 G9, where the WMI fan query is zeroed and hp-wmi fan*_input reads 0 RPM). Point it at a file published by a small root helper such as an ec_sys-based publisher; see README 'Fan override'. Missing, empty, or unreadable content falls back to the normal hwmon fan input, as does leaving this empty."
       },
       {
         "key": "gpu",

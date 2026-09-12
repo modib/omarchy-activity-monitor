@@ -115,8 +115,9 @@ WMI fan-speed response, so `hp-wmi`'s `fan*_input` always reads 0 RPM no
 matter how fast the fan spins (kernel [bug 221149](https://bugzilla.kernel.org/show_bug.cgi?id=221149)).
 
 `fanOverridePath` (default empty) points the readout at a file that a small
-root helper publishes instead. When its content is a positive integer it
-overrides the probed `hwmon` value; 0 or unreadable falls back to normal
+root helper publishes instead. When its content is a non-negative integer it
+overrides the probed `hwmon` value (0 means a stopped fan and renders `idle`
+honestly); missing, empty, or unreadable content falls back to normal
 behaviour, so unset machines are unaffected. One publisher that works for the
 HP 250 G9 is
 [`hp-ec-fan-rpm`](https://github.com/ansonboby/hp-ec-fan-rpm): it loads
