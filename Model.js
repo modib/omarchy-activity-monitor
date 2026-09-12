@@ -7,6 +7,7 @@
 
 var KIB_PER_GIB = 1048576
 var BYTES_PER_GIB = 1073741824
+var BYTES_PER_GB = 1000000000
 
 function toNumber(value, fallback) {
   var n = Number(String(value).trim())
@@ -198,6 +199,132 @@ function parseNvidia(raw) {
   }
 }
 
+// --------------------------------------------------------------------- disk
+
+// Clean human-readable label for storage partitions
+function formatDiskLabel(target, source) {
+  if (!target || target === "/") return "Linux ( / )"
+  if (target === "/boot" || target === "/boot/efi") return "Boot ( /boot )"
+  if (target === "/home") return "Home ( /home )"
+
+  // External drives or removable media mounted under /run/media/ or /media/
+  if (target.indexOf("/run/media/") === 0 || target.indexOf("/media/") === 0) {
+    var subParts = target.split("/").filter(Boolean)
+    var last = subParts.length > 0 ? subParts[subParts.length - 1] : ""
+    var dev = String(source || "").replace(/^\/dev\//, "")
+
+    // Check if label is a raw UUID / hex hash (e.g. 5C60C4CD60C4AED8 or GUID)
+    var isUuid = /^[0-9A-Fa-f]{8,}$|^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$|^[0-9a-fA-F\-]{32,}$/.test(last)
+    if (isUuid && dev) {
+      return dev + " (Drive)"
+    }
+    if (last) {
+      return last
+    }
+    if (dev) return dev
+  }
+
+  // Concise mount targets
+  if (target.length <= 15) return target
+
+  var devName = String(source || "").replace(/^\/dev\//, "")
+  if (devName) return devName
+  return target
+}
+
+// Parse df output with fixed columns: size, used, avail, pcent, target, source
+function parseDiskUsage(raw) {
+  var text = String(raw || "").trim()
+  if (!text) return null
+  var lines = text.split("\n")
+  if (lines.length < 2) return null
+
+  var mounts = []
+  var seenSource = {}
+  var rootMount = null
+
+  for (var i = 1; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (!line) continue
+    var parts = line.split(/\s+/)
+    if (parts.length < 5) continue
+
+    var size = toNumber(parts[0])
+    var used = toNumber(parts[1])
+    var avail = toNumber(parts[2])
+    var pcent = toNumber(parts[3].replace("%", ""))
+    var source = parts.length > 5 ? parts[parts.length - 1] : parts[4]
+    var target = parts.length > 5 ? parts.slice(4, parts.length - 1).join(" ") : parts[4]
+    if (!target) target = parts[4]
+
+    if (size <= 0) continue
+    // Skip virtual or image mounts that do not originate from /dev/
+    if (source.indexOf("/dev/") !== 0) continue
+
+    var entry = {
+      target: target,
+      source: source,
+      label: formatDiskLabel(target, source),
+      totalBytes: size,
+      usedBytes: used,
+      availBytes: avail,
+      percent: clamp(pcent, 0, 100)
+    }
+
+    if (target === "/") {
+      rootMount = entry
+    }
+
+    if (!seenSource[source] || target === "/") {
+      seenSource[source] = entry
+      mounts.push(entry)
+    }
+  }
+
+  if (!rootMount && mounts.length > 0) rootMount = mounts[0]
+  return { root: rootMount, mounts: mounts }
+}
+
+// Parse /proc/diskstats for whole physical block devices
+function parseDiskStats(raw, prevSectors, deltaSec) {
+  var text = String(raw || "").trim()
+  if (!text) return null
+  var lines = text.split("\n")
+  var readSectors = 0
+  var writeSectors = 0
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim()
+    if (!line) continue
+    var parts = line.split(/\s+/)
+    if (parts.length < 10) continue
+    var dev = parts[2]
+    // Only aggregate whole physical devices, ignore partition slices to prevent double counting
+    if (/^([hsv]d[a-z]+|nvme\d+n\d+|mmcblk\d+|vd[a-z]+)$/.test(dev)) {
+      readSectors += toNumber(parts[5])
+      writeSectors += toNumber(parts[9])
+    }
+  }
+
+  var currentSectors = { read: readSectors, write: writeSectors }
+  if (!prevSectors || !(deltaSec > 0)) {
+    return {
+      readBytesSec: 0,
+      writeBytesSec: 0,
+      sectors: currentSectors
+    }
+  }
+
+  var readDelta = Math.max(0, readSectors - prevSectors.read)
+  var writeDelta = Math.max(0, writeSectors - prevSectors.write)
+
+  return {
+    readBytesSec: (readDelta * 512) / deltaSec,
+    writeBytesSec: (writeDelta * 512) / deltaSec,
+    sectors: currentSectors
+  }
+}
+
 // -------------------------------------------------------------- formatting
 
 function gibFromKib(kib) {
@@ -206,6 +333,19 @@ function gibFromKib(kib) {
 
 function gibFromBytes(bytes) {
   return bytes / BYTES_PER_GIB
+}
+
+function gbFromBytes(bytes) {
+  if (!isFinite(bytes) || bytes <= 0) return 0
+  return bytes / BYTES_PER_GB
+}
+
+function formatStorageCap(usedBytes, totalBytes, unit) {
+  var isGb = String(unit || "gib").toLowerCase() === "gb"
+  var uVal = formatGib(isGb ? gbFromBytes(usedBytes) : gibFromBytes(usedBytes))
+  var tVal = formatGib(isGb ? gbFromBytes(totalBytes) : gibFromBytes(totalBytes))
+  var suffix = isGb ? "GB" : "GiB"
+  return uVal + suffix + " / " + tVal + suffix
 }
 
 // One decimal below 10 GiB, none above: "9.4G" and "62G" both stay narrow,
@@ -254,6 +394,14 @@ function formatWatts(watts) {
 function formatRpm(rpm) {
   if (!isFinite(rpm) || rpm < 0) return "–"
   return rpm === 0 ? "idle" : Math.round(rpm) + " rpm"
+}
+
+function formatBytesRate(bytesSec) {
+  if (!isFinite(bytesSec) || bytesSec < 0) return "–"
+  if (bytesSec < 1024) return Math.round(bytesSec) + " B/s"
+  if (bytesSec < 1048576) return Math.round(bytesSec / 1024) + " KB/s"
+  if (bytesSec < 1073741824) return (bytesSec / 1048576).toFixed(1) + " MB/s"
+  return (bytesSec / 1073741824).toFixed(1) + " GB/s"
 }
 
 // ----------------------------------------------------------------- processes

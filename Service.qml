@@ -65,6 +65,23 @@ Item {
   property var memory: null
   readonly property real memPercent: memory ? memory.percent : -1
 
+  property var diskInfo: null
+  readonly property string diskMount: String(setting("diskMount", "/"))
+  readonly property real diskPercent: {
+    if (!diskInfo || !diskInfo.mounts) return -1
+    for (var i = 0; i < diskInfo.mounts.length; i++) {
+      if (diskInfo.mounts[i].target === root.diskMount) return diskInfo.mounts[i].percent
+    }
+    return diskInfo.root ? diskInfo.root.percent : -1
+  }
+  property real diskReadBytesSec: 0
+  property real diskWriteBytesSec: 0
+  property real diskPeakBytesSec: 10485760
+  property var diskHistory: []
+  property var _rawDiskHistory: []
+  property var _prevDiskSectors: null
+  property real _prevDiskTimestamp: 0
+
   // Rolling history of the last 60 seconds, sampled once a second by a
   // lightweight pusher so the graphs glide instead of stepping between ticks.
   // File reads still happen on intervalSec; history just duplicates the latest
@@ -168,6 +185,32 @@ Item {
     root.fanHistory = f
   }
 
+  function pushDiskHistory(readBps, writeBps) {
+    var cap = root.historyCap
+    var raw = root._rawDiskHistory.slice()
+    var r = isFinite(readBps) && readBps >= 0 ? readBps : 0
+    var w = isFinite(writeBps) && writeBps >= 0 ? writeBps : 0
+    raw.push({ read: r, write: w })
+    if (raw.length > cap) raw.shift()
+    root._rawDiskHistory = raw
+
+    var peak = 10485760 // 10 MB/s dynamic floor
+    for (var i = 0; i < raw.length; i++) {
+      var tot = raw[i].read + raw[i].write
+      if (tot > peak) peak = tot
+    }
+    root.diskPeakBytesSec = peak
+
+    var norm = []
+    for (var j = 0; j < raw.length; j++) {
+      norm.push({
+        read: Model.clamp(100 * raw[j].read / peak, 0, 100),
+        write: Model.clamp(100 * raw[j].write / peak, 0, 100)
+      })
+    }
+    root.diskHistory = norm
+  }
+
   function sample() {
     statFile.reload()
     var jiffies = Model.parseCpuJiffies(statFile.text())
@@ -202,6 +245,18 @@ Item {
     }
 
     root.pushSensorHistory(cpuTempC, fanRpm)
+
+    diskstatsFile.reload()
+    var now = Date.now()
+    var deltaSec = root._prevDiskTimestamp > 0 ? (now - root._prevDiskTimestamp) / 1000 : 0
+    var diskStats = Model.parseDiskStats(diskstatsFile.text(), root._prevDiskSectors, deltaSec)
+    if (diskStats) {
+      root.diskReadBytesSec = diskStats.readBytesSec
+      root.diskWriteBytesSec = diskStats.writeBytesSec
+      root._prevDiskSectors = diskStats.sectors
+      root._prevDiskTimestamp = now
+      root.pushDiskHistory(diskStats.readBytesSec, diskStats.writeBytesSec)
+    }
 
     if (gpuIsNvidia) {
       sampleNvidia()
@@ -270,6 +325,7 @@ Item {
   FileView { id: memFile; path: "/proc/meminfo"; blockAllReads: true; printErrors: false }
   FileView { id: cpuinfoFile; path: "/proc/cpuinfo"; blockAllReads: true; printErrors: false }
   FileView { id: loadFile; path: "/proc/loadavg"; blockAllReads: true; printErrors: false }
+  FileView { id: diskstatsFile; path: "/proc/diskstats"; blockAllReads: true; printErrors: false }
 
   FileView {
     id: cpuTempFile
@@ -402,6 +458,36 @@ Item {
     onTriggered: root.refreshProcesses()
   }
 
+  // ----------------------------------------------------------------- storage
+
+  Process {
+    id: diskUsageProcess
+    command: ["df", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "efivarfs", "--output=size,used,avail,pcent,target,source"]
+    stdout: StdioCollector {
+      id: diskUsageOut
+      waitForEnd: true
+      onStreamFinished: {
+        var parsed = Model.parseDiskUsage(text)
+        if (parsed) root.diskInfo = parsed
+      }
+    }
+    stderr: StdioCollector { waitForEnd: true }
+  }
+
+  function refreshDiskUsage() {
+    if (!active || diskUsageProcess.running) return
+    diskUsageProcess.command = ["df", "-B1", "-x", "tmpfs", "-x", "devtmpfs", "-x", "squashfs", "-x", "efivarfs", "--output=size,used,avail,pcent,target,source"]
+    diskUsageProcess.running = true
+  }
+
+  Timer {
+    id: diskUsageTimer
+    interval: 15000
+    running: root.active
+    repeat: true
+    onTriggered: root.refreshDiskUsage()
+  }
+
   // -------------------------------------------------------------- lifetime
 
   Timer {
@@ -439,6 +525,7 @@ Item {
       root.memHistory = dup(root.memHistory)
       root.tempHistory = dup(root.tempHistory)
       root.fanHistory = dup(root.fanHistory)
+      root.diskHistory = dup(root.diskHistory)
     }
   }
 
@@ -447,6 +534,7 @@ Item {
     sample()
     refreshProbe()
     refreshProcesses()
+    refreshDiskUsage()
   }
 
   onActiveChanged: if (active) start()
