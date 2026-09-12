@@ -33,6 +33,14 @@ Item {
 
   readonly property int intervalSec: intSetting("refreshIntervalSec", 2, 1, 60)
 
+  // User-supplied fan RPM source overriding the probed hwmon input when it
+  // reports a positive value. Set via config/panel for firmware that reports
+  // a stuck 0 (HP 250 G9 / kernel bug 221149 — see README "Fan override").
+  readonly property string fanOverridePath: {
+    var path = String(setting("fanOverridePath", "")).trim()
+    return path === "" ? "" : path
+  }
+
   // ------------------------------------------------------------- discovery
 
   property var probe: Model.parseProbe("")
@@ -44,8 +52,9 @@ Item {
   readonly property var fanInfo: probe.fan
   readonly property bool hasFan: fanInfo !== null && fanInfo !== undefined
   readonly property bool hasTempSensor: cpuTempFile.path !== ""
-  readonly property bool hasFanSensor: fanFile.path !== ""
-    && fanInfo.path !== undefined && fanInfo.path !== null && fanInfo.path !== ""
+  readonly property bool hasFanSensor: (fanFile.path !== ""
+    && fanInfo.path !== undefined && fanInfo.path !== null && fanInfo.path !== "")
+    || fanOverrideFile.path !== ""
 
   // -------------------------------------------------------------- readings
   //
@@ -196,7 +205,18 @@ Item {
       cpuTempC = readTemp(cpuTempFile)
     }
 
-    if (fanFile.path !== "") {
+    if (fanOverrideFile.path !== "") {
+      fanOverrideFile.reload()
+      var overrideRpm = readNumber(fanOverrideFile, 0)
+      // -1 means unreadable/garbage — fall back. 0 is a real reading (fan
+      // off), so it overrides too and renders "idle" honestly.
+      if (overrideRpm >= 0) {
+        fanRpm = overrideRpm
+      } else {
+        fanFile.reload()
+        fanRpm = readNumber(fanFile, 0)
+      }
+    } else if (fanFile.path !== "") {
       fanFile.reload()
       fanRpm = readNumber(fanFile, 0)
     }
@@ -281,6 +301,19 @@ Item {
   FileView {
     id: fanFile
     path: root.hasFan ? String(root.fanInfo.path) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+
+  // Optional user-supplied fan RPM source (plain integer, one line). When it
+  // returns a positive number it overrides the probed hwmon fan input — for
+  // machines whose firmware lies about fan speed (e.g. HP 250 G9, where the
+  // WMI fan query is zeroed and hp-wmi fan*_input permanently reads 0;
+  // kernel bug 221149) an external root helper can publish the real tach
+  // here (see README "Fan override").
+  FileView {
+    id: fanOverrideFile
+    path: root.fanOverridePath
     blockAllReads: true
     printErrors: false
   }

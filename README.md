@@ -108,6 +108,37 @@ and GPU temperature.
 ![labels](assets/preview-bar-labels.png) `labels` — each label welded to its
 figure.
 
+## Fan override
+
+Some firmware reports a permanently stuck fan reading — HP 250 G9 zeroes the
+WMI fan-speed response, so `hp-wmi`'s `fan*_input` always reads 0 RPM no
+matter how fast the fan spins (kernel [bug 221149](https://bugzilla.kernel.org/show_bug.cgi?id=221149)).
+
+`fanOverridePath` (default empty) points the readout at a file that a small
+root helper publishes instead. When its content is a positive integer it
+overrides the probed `hwmon` value; 0 or unreadable falls back to normal
+behaviour, so unset machines are unaffected. One publisher that works for the
+HP 250 G9 is
+[`hp-ec-fan-rpm`](https://github.com/ansonboby/hp-ec-fan-rpm): it loads
+`ec_sys` (read-only), polls the Insyde EC tach register and writes
+`RPM×100` to `/run/hp-fan-rpm` every 2 seconds:
+
+```sh
+# once, as root — installs the publisher and enables it at boot
+sudo install -m 755 hp-ec-fan-rpm /usr/local/bin/
+sudo install -m 644 hp-ec-fan-rpm.service /etc/systemd/system/
+sudo systemctl enable --now hp-ec-fan-rpm
+```
+
+Then set the path (panel settings or config) and the bar shows real RPM:
+
+```sh
+omarchy bar set modib.activity-monitor fanOverridePath /run/hp-fan-rpm
+```
+
+The plugin itself never runs as root — the override file only needs to be
+readable by your user.
+
 ## What it reads
 
 | | Source | Shown |
@@ -116,7 +147,7 @@ figure.
 | CPU load | `/proc/stat` | jiffie deltas between samples, `iowait` counted as idle — the same arithmetic `top` and `btop` use |
 | CPU clock | `/proc/cpuinfo` | mean across every thread |
 | CPU temperature | `hwmon` | die/package sensor, picked by scoring (`k10temp` `Tdie`/`Tctl`, `coretemp` `Package id 0`, `zenpower`, ThinkPad, ARM SoC, then `acpitz`) |
-| System fan | `hwmon` or EC platform device (`fan*_input`) | RPM, whenever a reading exists |
+| System fan | `hwmon` or EC platform device (`fan*_input`), or `fanOverridePath` if set | RPM, whenever a reading exists |
 | GPU | its own `sysfs` counter | load, edge temperature, VRAM, board power, fan, core clock |
 | GPU (NVIDIA) | `nvidia-smi` | the same telemetry, polled on the same interval |
 | Load average | `/proc/loadavg` | 1/5/15 minute |
@@ -242,6 +273,7 @@ omarchy-shell modib.activity-monitor status     # full telemetry breakdown
 - `coreutils` (`kill`) for the consent-confirmed kill actions
 - `pciutils` (`lspci`) — optional, to name the GPU card in the panel
 - `nvidia-smi` — only for NVIDIA cards
+- A fan RPM publisher — only for firmware that reports a stuck 0 RPM (e.g. HP 250 G9, kernel [bug 221149](https://bugzilla.kernel.org/show_bug.cgi?id=221149)); the plugin itself stays rootless (see [Fan override](#fan-override))
 
 No pip packages, no daemon, no elevated privileges.
 
